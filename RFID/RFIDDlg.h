@@ -5,6 +5,8 @@
 #pragma once
 #include "is_d2xx.h"
 
+#define MESSAGE_READ_CARD WM_USER
+
 // CRFIDDlg 대화 상자
 class CRFIDDlg : public CDialogEx
 {
@@ -20,7 +22,7 @@ public:
 	unsigned short writeLength = 0;
 	unsigned char readData[1024];
 	unsigned short readLength = 0;
-	BOOL flag_r=0;
+	
 // 대화 상자 데이터입니다.
 #ifdef AFX_DESIGN_TIME
 	enum { IDD = IDD_RFID_DIALOG };
@@ -31,6 +33,13 @@ public:
 
 
 // 구현입니다.
+private:
+	BOOL m_flagReadOnce; // kenGwon1028: 안쓰이고 있음. 최종 완성 시점에서도 안쓰고 있으면 삭제할 것.
+	BOOL m_flagReadContinue;
+	CString m_strRfid;
+	BOOL m_flagReadCardWorkingThread;
+	CWinThread* m_pThread;
+
 protected:
 	HICON m_hIcon;
 
@@ -45,8 +54,10 @@ public:
 	afx_msg void OnDisconnect();
 	afx_msg void OnReadOnce();
 	afx_msg void OnReadContinue();
-	CString m_strRfid;
 	
 	afx_msg void OnBnClickedButton5();
 	afx_msg void OnBnClickedButton6();
+
+	BOOL get_m_flagReadCardWorkingThread();
+	LRESULT ReadCard(WPARAM wParam, LPARAM lParam);
 };

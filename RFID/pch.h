@@ -9,6 +9,19 @@
 
 // 여기에 미리 컴파일하려는 헤더 추가
 //#include "framework.h"
+
 #pragma comment(linker, "/ENTRY:WinMainCRTStartup /subsystem:console")
+#pragma comment(lib, "libmariadb.lib")
+#include "mysql/mysql.h"
+
+#define CONNECT_IP "127.0.0.1"
+#define DB_USER "root"
+#define DB_PASSWORD "kgh951220"
+#define DB_NAME "mysql"
+#define DB_PORT 3306
+
+extern MYSQL Connect; // from RFIDDlg.cpp
+extern MYSQL_RES* sql_query_result; // from RFIDDlg.cpp
+extern MYSQL_ROW sql_row; // from RFIDDlg.cpp
 
 #endif //PCH_H
