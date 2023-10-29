@@ -65,5 +65,8 @@
     <Image Include="res\RFID.ico">
       <Filter>리소스 파일</Filter>
     </Image>
+    <Image Include="res\kenGwon.ico">
+      <Filter>리소스 파일</Filter>
+    </Image>
   </ItemGroup>
 </Project>
