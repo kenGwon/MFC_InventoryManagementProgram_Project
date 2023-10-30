@@ -104,4 +104,3 @@ BOOL CRFIDApp::InitInstance()
 	// 반환합니다.
 	return FALSE;
 }
-

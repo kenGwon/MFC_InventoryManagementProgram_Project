@@ -10,9 +10,10 @@
 #define IDR_MAINFRAME                   128
 #define IDI_ICON1                       130
 #define IDC_BUTTON1                     1000
+#define IDC_ABOUT                       1000
 #define IDC_BUTTON2                     1001
-#define IDC_BUTTON3                     1002
-#define IDC_BUTTON4                     1003
+#define IDC_READ_ONCE                   1002
+#define IDC_READ_CONTINUE               1003
 #define IDC_EDIT1                       1004
 #define IDC_BUTTON5                     1005
 #define IDC_BUTTON6                     1006

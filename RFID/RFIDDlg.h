@@ -17,6 +17,9 @@
 #pragma comment(lib, "libmariadb.lib")
 #include "mysql/mysql.h"
 
+// 프로그램 정보 다이얼로그
+#include "AboutDlg.h"
+
 // 콘솔 디버깅
 #include <conio.h>
 #include <stdio.h>
@@ -57,6 +60,7 @@ private:
 	unsigned short readLength = 0;
 
 	BOOL m_flagReadContinue;
+	BOOL m_flagDBConnection;
 	BOOL m_flagRFIDConnection;
 	BOOL m_flagReadCardWorkingThread;
 
@@ -81,9 +85,9 @@ protected:
 	afx_msg HCURSOR OnQueryDragIcon();
 	afx_msg void OnReadOnce();
 	afx_msg void OnReadContinue();
-	afx_msg void OnBnClickedButton6();
 	afx_msg void OnBnClickedRfidConnection();
 	afx_msg void OnCbnSelchangeDbSelectCombo();
+	afx_msg void OnClickedAbout();
 
 public:
 	CRFIDDlg(CWnd* pParent = nullptr);

@@ -7,44 +7,7 @@
 static MYSQL Connect;
 static MYSQL_RES* sql_query_result;
 static MYSQL_ROW sql_row;
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
-//----------------------------------------------------------------------------------------------------------------------------// 
-
-// 응용 프로그램 정보에 사용되는 CAboutDlg 대화 상자입니다.
-
-class CAboutDlg : public CDialogEx
-{
-public:
-	CAboutDlg();
-
-	// 대화 상자 데이터입니다.
-#ifdef AFX_DESIGN_TIME
-	enum { IDD = IDD_ABOUTBOX };
-#endif
-
-protected:
-	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV 지원입니다.
-
-	// 구현입니다.
-protected:
-	DECLARE_MESSAGE_MAP()
-};
-
-CAboutDlg::CAboutDlg() : CDialogEx(IDD_ABOUTBOX)
-{
-}
-
-void CAboutDlg::DoDataExchange(CDataExchange* pDX)
-{
-	CDialogEx::DoDataExchange(pDX);
-}
-
-BEGIN_MESSAGE_MAP(CAboutDlg, CDialogEx)
-END_MESSAGE_MAP()
-
-//----------------------------------------------------------------------------------------------------------------------------// 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
+static CString past_card_uid;
 
 /*
   desc: "계속읽기" 모드를 담당할 작업스레드. 1초마다 한번씩 "1회 읽기" 메세지를 생성한다.
@@ -73,10 +36,10 @@ BEGIN_MESSAGE_MAP(CRFIDDlg, CDialogEx)
 	ON_WM_SYSCOMMAND()
 	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
-	ON_BN_CLICKED(IDC_BUTTON3, &CRFIDDlg::OnReadOnce)
-	ON_BN_CLICKED(IDC_BUTTON4, &CRFIDDlg::OnReadContinue)
-	ON_BN_CLICKED(IDC_BUTTON6, &CRFIDDlg::OnBnClickedButton6)
+	ON_BN_CLICKED(IDC_READ_ONCE, &CRFIDDlg::OnReadOnce)
+	ON_BN_CLICKED(IDC_READ_CONTINUE, &CRFIDDlg::OnReadContinue)
 	ON_BN_CLICKED(IDC_RFID_CONNECTION, &CRFIDDlg::OnBnClickedRfidConnection)
+	ON_BN_CLICKED(IDC_ABOUT, &CRFIDDlg::OnClickedAbout)
 	ON_CBN_SELCHANGE(IDC_DB_SELECT_COMBO, &CRFIDDlg::OnCbnSelchangeDbSelectCombo)
 
 	ON_MESSAGE(MESSAGE_READ_CARD, &CRFIDDlg::ReadCard) // kenGwon: 사용자정의 메세지 추가
@@ -94,11 +57,21 @@ CRFIDDlg::CRFIDDlg(CWnd* pParent /*=nullptr*/)
 
 	// 플래그 초기화
 	m_flagReadContinue = FALSE;
+	m_flagDBConnection = FALSE;
 	m_flagRFIDConnection = FALSE;
 	m_flagReadCardWorkingThread = FALSE;
 
-	m_strCurrentDBName = m_db_name[mfc_test]; // DB name 초기화
-	AttachDB(m_strCurrentDBName); // DB 연결
+	past_card_uid = _T(""); // static 전역변수
+	m_strCurrentDBName = ""; 
+	m_strRfid = _T("여기에 카드UID 출력");
+	m_strStuffTitle = _T("여기에 물품이름 출력");
+	m_pThread = nullptr;
+
+	/* 아래 멤버변수는 OnInitDialog()에서 초기화
+	m_image_rect
+	m_image
+	m_ctrlDBcomboBox
+	*/
 }
 
 /*
@@ -156,24 +129,32 @@ BOOL CRFIDDlg::OnInitDialog()
 
 	// TODO: 여기에 추가 초기화 작업을 추가합니다.
 
+	// 콤보박스 선택지를 채운다.
 	m_ctrlDBcomboBox.AddString(_T("도서관리"));
 	m_ctrlDBcomboBox.AddString(_T("음반관리"));
 	m_ctrlDBcomboBox.AddString(_T("와인관리"));
 	m_ctrlDBcomboBox.AddString(_T("출입관리"));
 
+	// 시작화면 이미지를 출력한다.
 	GetDlgItem(IDC_STUFF_PICTURE)->GetWindowRect(m_image_rect); // 그림 출력에 사용하기 위해 Picture Control의 위치를 얻는다.
 	ScreenToClient(m_image_rect); // GetWindowRect로 좌표를 얻으면 캡션과 테두리 영역이 포함되기 때문에 해당 영역을 제외시킨다.
-
-	// 시작화면 이미지를 출력한다.
-	m_image.Load(_T("img\\logo1.bmp"));
+	m_image.Load(_T("img\\IDE_logo.bmp"));
 	InvalidateRect(m_image_rect, TRUE);
 
+	// Edit Control의 폰트 사이즈를 키운다.
+	CFont font1, font2;
+	font1.CreatePointFont(180, _T("굴림"));
+	font2.CreatePointFont(120, _T("굴림"));
+	GetDlgItem(IDC_EDIT1)->SetFont(&font1);
+	GetDlgItem(IDC_EDIT2)->SetFont(&font2);
+	font1.Detach();
+	font2.Detach();
 
 	return TRUE;  // 포커스를 컨트롤에 설정하지 않으면 TRUE를 반환합니다.
 }
 
 /*
-  desc:
+  desc: 프로그램 Title Bar 왼쪽의 아이콘을 눌렀을 때 나오는 메뉴에서 "RFID 정보"를 눌렀을 때의 동작을 정의
 */
 void CRFIDDlg::OnSysCommand(UINT nID, LPARAM lParam)
 {
@@ -245,7 +226,25 @@ void CRFIDDlg::OnReadOnce()
 		return;
 	}
 
-	ReadCard(NULL, NULL);
+	if (!m_flagRFIDConnection || !m_flagDBConnection)
+	{
+		if (!m_flagRFIDConnection && !m_flagDBConnection)
+		{
+			AfxMessageBox(_T("1. RFID를 연결하십시오.\n2. 관리 카테고리를 선택하십시오."));
+		}
+		else if (!m_flagRFIDConnection)
+		{
+			AfxMessageBox(_T("RFID를 연결하십시오."));
+		}
+		else if (!m_flagDBConnection)
+		{
+			AfxMessageBox(_T("관리 카테고리를 선택하십시오."));
+		}
+	}
+	else
+	{
+		ReadCard(NULL, NULL);
+	}
 }
 
 /* <Message Mapped Function>
@@ -253,33 +252,41 @@ void CRFIDDlg::OnReadOnce()
 */
 void CRFIDDlg::OnReadContinue()
 {
-	// 플래그 처리  
-	if (m_flagReadContinue == FALSE) m_flagReadContinue = TRUE;
-	else m_flagReadContinue = FALSE;
-
-	// 스레드 처리
-	if (m_flagReadContinue == TRUE)
-	{
-		m_flagReadCardWorkingThread = TRUE;
-		m_pThread = AfxBeginThread(ThreadForReading, this);
-		SetDlgItemText(IDC_BUTTON4, _T("계속읽기 ing.."));
+	if (!m_flagRFIDConnection || !m_flagDBConnection)
+	{	
+		if (!m_flagRFIDConnection && !m_flagDBConnection)
+		{
+			AfxMessageBox(_T("1. RFID를 연결하십시오.\n2. 관리 카테고리를 선택하십시오."));
+		}
+		else if (!m_flagRFIDConnection)
+		{
+			AfxMessageBox(_T("RFID를 연결하십시오."));
+		}
+		else if (!m_flagDBConnection)
+		{
+			AfxMessageBox(_T("관리 카테고리를 선택하십시오."));
+		}
 	}
 	else
 	{
-		m_flagReadCardWorkingThread = FALSE;
-		WaitForSingleObject(m_pThread->m_hThread, 5000);
-		SetDlgItemText(IDC_BUTTON4, _T("계속읽기"));
-	}
-}
+		// 플래그 처리  
+		if (m_flagReadContinue == FALSE) m_flagReadContinue = TRUE;
+		else m_flagReadContinue = FALSE;
 
-/* <Message Mapped Function>
-  desc: (현재까지는) "소리재생" 버튼 컴포넌트가 발생시키는 클릭 메세지에 대응하는 함수
-*/
-void CRFIDDlg::OnBnClickedButton6()
-{
-	//sndPlaySound("sound.wav", SND_ASYNC | SND_NODEFAULT);
-	PlaySoundW(_T("sound\\camera.wav"), NULL, SND_FILENAME | SND_ASYNC);
-	//_getch();
+		// 스레드 처리
+		if (m_flagReadContinue == TRUE)
+		{
+			m_flagReadCardWorkingThread = TRUE;
+			m_pThread = AfxBeginThread(ThreadForReading, this);
+			SetDlgItemText(IDC_READ_CONTINUE, _T("계속읽기 ing.."));
+		}
+		else
+		{
+			m_flagReadCardWorkingThread = FALSE;
+			WaitForSingleObject(m_pThread->m_hThread, 5000);
+			SetDlgItemText(IDC_READ_CONTINUE, _T("계속읽기"));
+		}
+	}
 }
 
 /* <Message Mapped Function>
@@ -291,6 +298,7 @@ void CRFIDDlg::OnBnClickedRfidConnection()
 	{
 		if (OnConnect())
 		{
+			PlaySoundW(_T("sound\\DeviceConnect.wav"), NULL, SND_FILENAME | SND_ASYNC);
 			m_flagRFIDConnection = TRUE;
 			SetDlgItemText(IDC_RFID_STATUS, _T("RFID status: Connect!!!"));
 			SetDlgItemText(IDC_RFID_CONNECTION, _T("RFID 해제"));
@@ -298,13 +306,14 @@ void CRFIDDlg::OnBnClickedRfidConnection()
 		}
 		else
 		{
-			AfxMessageBox(_T("RFID 연결에 실패했습니다!"));
+			AfxMessageBox(_T("RFID 연결에 실패했습니다!")); 
 		}
 	}
 	else
 	{
 		if (OnDisconnect())
 		{
+			PlaySoundW(_T("sound\\DeviceDisconnect.wav"), NULL, SND_FILENAME | SND_ASYNC);
 			m_flagRFIDConnection = FALSE;
 			SetDlgItemText(IDC_RFID_STATUS, _T("RFID status: Disconnect..."));
 			SetDlgItemText(IDC_RFID_CONNECTION, _T("RFID 연결"));
@@ -325,6 +334,7 @@ void CRFIDDlg::OnBnClickedRfidConnection()
 void CRFIDDlg::OnCbnSelchangeDbSelectCombo()
 {
 	DetachDB(m_strCurrentDBName); // 이전 DB의 연결을 끊는다.
+	past_card_uid = _T(""); // DB가 바뀌었으므로, past_card_uid값을 초기화해준다.
 
 	UpdateData(TRUE);
 	CString CBox_select;
@@ -335,6 +345,7 @@ void CRFIDDlg::OnCbnSelchangeDbSelectCombo()
 		m_strCurrentDBName = m_db_name[mfc_book_management];
 		GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(120, 70, 240, 320);
 		SetDlgItemText(IDC_TITLE_NAME, _T("Title:"));
+
 	}
 	else if (CBox_select == _T("음반관리"))
 	{
@@ -356,7 +367,8 @@ void CRFIDDlg::OnCbnSelchangeDbSelectCombo()
 	}
 	else
 	{
-		printf("error occured!!! in ComboBox\n");
+		AfxMessageBox(_T("error occured in ComboBox!!!"));
+		printf("error occured in ComboBox!!!\n");
 		return;
 	}
 
@@ -366,7 +378,21 @@ void CRFIDDlg::OnCbnSelchangeDbSelectCombo()
 	ScreenToClient(m_image_rect);
 	m_image.~CImage();
 
+	// IDC_EDIT1, IDC_EDIT2를 비운다.
+	SetDlgItemText(IDC_EDIT1, _T(""));
+	SetDlgItemText(IDC_EDIT2, _T(""));
+
 	AttachDB(m_strCurrentDBName); // 새로운 DB를 연결한다.
+	PlaySoundW(_T("sound\\ChangeAlert.wav"), NULL, SND_FILENAME | SND_ASYNC);
+}
+
+/* <Message Mapped Function>
+  desc: 프로그램 정보 다이얼로그를 띄운다.
+*/
+void CRFIDDlg::OnClickedAbout()
+{
+	CAboutDlg aboutDlg;
+	aboutDlg.DoModal();
 }
 
 /*
@@ -375,12 +401,18 @@ void CRFIDDlg::OnCbnSelchangeDbSelectCombo()
 */
 void CRFIDDlg::AttachDB(string& DBName)
 {
+	m_flagDBConnection = TRUE;
 	mysql_init(&Connect); // Connect는 pre-compiled header에 전역변수로 정의되어 있음.
 
 	if (mysql_real_connect(&Connect, CONNECT_IP, DB_USER, DB_PASSWORD, DBName.c_str(), DB_PORT, NULL, 0))
+	{
 		printf("%s DB 연결성공!!!\n", DBName.c_str());
+	}
 	else
+	{
+		AfxMessageBox(_T("DB연결에 실패했습니다.\nDB서버 개방여부 확인하십시오."));
 		printf("%s DB 연결실패...\n", DBName.c_str());
+	}
 
 	mysql_query(&Connect, "SET Names euckr"); // DB 문자 인코딩을 euckr로 셋팅
 }
@@ -391,6 +423,7 @@ void CRFIDDlg::AttachDB(string& DBName)
 */
 void CRFIDDlg::DetachDB(string& DBName)
 {
+	m_flagDBConnection = FALSE;
 	printf("%s DB 연결해제...\n", DBName.c_str());
 	mysql_close(&Connect);
 }
@@ -554,7 +587,6 @@ BOOL CRFIDDlg::get_m_flagReadCardWorkingThread()
 */
 LRESULT CRFIDDlg::ReadCard(WPARAM wParam, LPARAM lParam)
 {
-	static CString past_card_uid = _T("");
 	CString card_uid, title, img_path;
 
 	// 카드 UID 읽기
