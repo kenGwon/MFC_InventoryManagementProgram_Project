@@ -106,4 +106,5 @@ public:
 
 	LRESULT ReadCard(WPARAM wParam, LPARAM lParam);
 	CString ReadCardUID();
+	afx_msg void OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDrawItemStruct);
 };
