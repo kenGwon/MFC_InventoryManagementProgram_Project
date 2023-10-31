@@ -2,9 +2,7 @@
 // RFIDDlg.h: 헤더 파일
 //
 #pragma once
-using namespace std;
 #include "afxdialogex.h"
-#include "framework.h"
 #include "pch.h"
 #include "is_d2xx.h"
 #include "RFID.h"
@@ -34,6 +32,8 @@ using namespace std;
 
 #define MESSAGE_READ_CARD WM_USER + 1 // 사용자 정의 메세지
 
+using namespace std;
+
 // CRFIDDlg 대화 상자
 class CRFIDDlg : public CDialogEx
 {
@@ -48,7 +48,7 @@ private:
 	unsigned short readLength = 0;
 
 	BOOL m_flagReadCardWorkingThread;
-	BOOL m_flagAuthority;
+	BOOL m_flagUserAuthority;
 	BOOL m_flagRFIDConnection;
 	BOOL m_flagDBConnection;
 	BOOL m_flagReadContinue;

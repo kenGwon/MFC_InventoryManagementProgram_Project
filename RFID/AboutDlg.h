@@ -1,8 +1,6 @@
 #pragma once
 #include "afxdialogex.h"
-#include "framework.h"
 #include "pch.h"
-#include "is_d2xx.h"
 #include "RFID.h"
 
 class CAboutDlg : public CDialogEx

@@ -56,7 +56,7 @@ CRFIDDlg::CRFIDDlg(CWnd* pParent /*=nullptr*/)
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_kenGwon);
 
 	// 플래그 초기화
-	m_flagAuthority = FALSE;
+	m_flagUserAuthority = FALSE;
 	m_flagReadContinue = FALSE;
 	m_flagDBConnection = FALSE;
 	m_flagRFIDConnection = FALSE;
@@ -227,7 +227,7 @@ void CRFIDDlg::OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDrawItemStruct)
 
 	if (nIDCtl == IDC_READ_CONTINUE)
 	{
-		if (m_flagAuthority)
+		if (m_flagUserAuthority)
 		{
 			GetDlgItem(IDC_READ_CONTINUE)->EnableWindow(TRUE);
 
@@ -242,7 +242,7 @@ void CRFIDDlg::OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDrawItemStruct)
 				{
 					pDC->FillSolidRect(&lpDrawItemStruct->rcItem, RGB(236, 230, 204)); // 아이보리색
 					pDC->Draw3dRect(&lpDrawItemStruct->rcItem, RGB(128, 128, 128), RGB(125, 125, 125));
-					pDC->DrawText(_T("계속읽기 진행중"), 8, &lpDrawItemStruct->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+					pDC->DrawText(_T("계속읽기 실행중"), 8, &lpDrawItemStruct->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 				}
 				else
 				{
@@ -271,14 +271,13 @@ void CRFIDDlg::OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDrawItemStruct)
 
 	if (nIDCtl == IDC_READ_ONCE)
 	{
-
-		if (m_flagAuthority)
+		if (m_flagUserAuthority)
 		{
 			GetDlgItem(IDC_READ_ONCE)->EnableWindow(TRUE);
 
 			if (lpDrawItemStruct->itemAction & ODA_DRAWENTIRE || lpDrawItemStruct->itemAction & ODA_FOCUS || lpDrawItemStruct->itemAction & ODA_SELECT)
 			{
-				if (lpDrawItemStruct->itemAction & ODA_SELECT)
+				if (lpDrawItemStruct->itemAction & ODA_FOCUS)
 				{
 					CDC* pDC = CDC::FromHandle(lpDrawItemStruct->hDC);
 
@@ -430,14 +429,11 @@ void CRFIDDlg::OnCbnSelchangeDbSelectCombo()
 		m_flagReadContinue = FALSE;
 		m_flagReadCardWorkingThread = FALSE;
 		WaitForSingleObject(m_pThread->m_hThread, 5000);
-		SetDlgItemText(IDC_READ_CONTINUE, _T("계속읽기"));
 	}
 
 	DetachDB(m_strCurrentDBName); // 이전 DB의 연결을 끊는다.
 	past_card_uid = _T(""); // DB가 바뀌었으므로, past_card_uid값을 초기화해준다.
-	m_flagAuthority = FALSE; // DB가 바뀌었으므로, 관리자 권한 플래그도 초기화해준다.
-	SetDlgItemText(IDC_READ_ONCE, _T("1회 읽기")); // 임시 owner draw 호출용 메세지 생성
-	SetDlgItemText(IDC_READ_CONTINUE, _T("계속읽기")); // 임시 owner draw 호출용 메세지 생성
+	m_flagUserAuthority = FALSE; // DB가 바뀌었으므로, 관리자 권한 플래그도 초기화해준다.
 
 	UpdateData(TRUE);
 	CString CBox_select;
@@ -451,11 +447,9 @@ void CRFIDDlg::OnCbnSelchangeDbSelectCombo()
 		m_strStuffName = _T("");
 		m_strUserName = _T("");
 		m_strUserAuthority = _T("");
-		UpdateData(FALSE);
 
 		// Print Control에 IDLE 상태의 로고 이미지를 출력한다.
 		GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(70, 125, 345, 195);
-		Invalidate(TRUE);
 		GetDlgItem(IDC_STUFF_PICTURE)->GetWindowRect(m_stuff_image_rect);
 		ScreenToClient(m_stuff_image_rect);
 		PrintImage(_T("img\\IDE_logo.bmp"), m_stuff_image, m_stuff_image_rect);
@@ -467,6 +461,9 @@ void CRFIDDlg::OnCbnSelchangeDbSelectCombo()
 		// Edit Control에 안내 메세지를 적는다.
 		SetDlgItemText(IDC_EDIT1, _T("여기에 카드UID 출력"));
 		SetDlgItemText(IDC_EDIT2, _T("여기에 물품이름 출력"));
+
+		UpdateData(FALSE);
+		Invalidate(TRUE);
 
 		PlaySoundW(_T("sound\\ChangeAlert.wav"), NULL, SND_FILENAME | SND_ASYNC);
 		return; // 함수 리턴.
@@ -510,7 +507,9 @@ void CRFIDDlg::OnCbnSelchangeDbSelectCombo()
 	m_strStuffName = _T("");
 	m_strUserName = _T("");
 	m_strUserAuthority = _T("");
+	
 	UpdateData(FALSE);
+	Invalidate(TRUE);
 
 	PlaySoundW(_T("sound\\ChangeAlert.wav"), NULL, SND_FILENAME | SND_ASYNC);
 	AttachDB(m_strCurrentDBName); // 새로운 DB를 연결한다.
@@ -546,6 +545,7 @@ void CRFIDDlg::OnBnClickReadOnce()
 	else
 	{
 		ReadStuffCard(NULL, NULL);
+		Invalidate(TRUE);
 	}
 }
 
@@ -614,6 +614,7 @@ void CRFIDDlg::OnBnClickedReadUser()
 	else
 	{
 		ReadUserCard(NULL, NULL);
+		Invalidate(TRUE);
 	}
 }
 
@@ -631,17 +632,18 @@ void CRFIDDlg::OnBnClickedUserUnauthorize()
 		SetDlgItemText(IDC_READ_CONTINUE, _T("계속읽기"));
 	}
 
-	if (m_flagAuthority)
+	if (m_flagUserAuthority)
 	{
-		m_flagAuthority = FALSE;
-		SetDlgItemText(IDC_READ_ONCE, _T("1회 읽기")); // 임시 owner draw 호출용 메세지 생성
-		SetDlgItemText(IDC_READ_CONTINUE, _T("계속읽기")); // 임시 owner draw 호출용 메세지 생성
+		m_flagUserAuthority = FALSE;
 		m_strUserName = _T("");
 		m_strUserAuthority = _T("");
 
 		GetDlgItem(IDC_USER_PICTURE)->GetWindowRect(m_user_image_rect);
 		ScreenToClient(m_user_image_rect);
 		PrintImage(_T("img\\IDE_user.bmp"), m_user_image, m_user_image_rect);
+
+		UpdateData(FALSE);
+		Invalidate(TRUE);
 
 		PlaySoundW(_T("sound\\DeviceDisconnect.wav"), NULL, SND_FILENAME | SND_ASYNC);
 		MessageBox(_T("사용자 인증이 해제되었습니다.\n다시 사용하려면 다시 관리자 카드를 읽어주세요."));
@@ -1001,26 +1003,23 @@ LRESULT CRFIDDlg::ReadUserCard(WPARAM wParam, LPARAM lParam)
 
 		if (authority == _T("1"))
 		{
-			m_flagAuthority = TRUE;
+			m_flagUserAuthority = TRUE;
 			m_strUserAuthority = _T("관리자");
-			SetDlgItemText(IDC_READ_ONCE, _T("1회 읽기")); // 임시 owner draw 호출용 메세지 생성
-			SetDlgItemText(IDC_READ_CONTINUE, _T("계속읽기")); // 임시 owner draw 호출용 메세지 생성
 #ifdef CONSOLE_DEBUG 
 			printf("접근 권한 open.\n");
 #endif
 		}
 		else
 		{
-			m_flagAuthority = FALSE;
-			m_strUserAuthority = _T("일반 사용자");
-			SetDlgItemText(IDC_READ_ONCE, _T("1회 읽기")); // 임시 owner draw 호출용 메세지 생성
-			SetDlgItemText(IDC_READ_CONTINUE, _T("계속읽기")); // 임시 owner draw 호출용 메세지 생성
+			m_flagUserAuthority = FALSE;
+			m_strUserAuthority = _T("일반사원");
 #ifdef CONSOLE_DEBUG 
 			printf("접근 권한 close.\n");
 #endif
 		}
 
 		UpdateData(FALSE);
+		Invalidate(TRUE);
 
 		PlaySoundW(_T("sound\\DeviceConnect.wav"), NULL, SND_FILENAME | SND_ASYNC);
 		MessageBox(_T("사용자 인증에 성공했습니다."));
