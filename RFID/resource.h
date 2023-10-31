@@ -16,6 +16,7 @@
 #define IDC_READ_CONTINUE               1003
 #define IDC_EDIT1                       1004
 #define IDC_BUTTON5                     1005
+#define IDC_READ_USER                   1005
 #define IDC_BUTTON6                     1006
 #define IDC_RFID_CONNECTION             1007
 #define IDC_RFID_STATUS                 1008
@@ -23,6 +24,12 @@
 #define IDC_STUFF_PICTURE               1010
 #define IDC_EDIT2                       1011
 #define IDC_TITLE_NAME                  1012
+#define IDC_CATEGORY_TEXT               1013
+#define IDC_USER_PICTURE                1016
+#define IDC_UNAUTHORIZE                 1017
+#define IDC_USER_UNAUTHORIZE            1017
+#define IDC_EDIT3                       1018
+#define IDC_EDIT4                       1019
 
 // Next default values for new objects
 // 
@@ -30,7 +37,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        131
 #define _APS_NEXT_COMMAND_VALUE         32771
-#define _APS_NEXT_CONTROL_VALUE         1013
+#define _APS_NEXT_CONTROL_VALUE         1020
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

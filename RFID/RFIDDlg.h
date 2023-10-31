@@ -37,12 +37,19 @@ using namespace std;
 
 #define MESSAGE_READ_CARD WM_USER + 1 // 사용자 정의 메세지
 
+
+enum ISO_Type
+{
+	ISO14443A = 0,
+	ISO15693
+};
+
 enum DB_Name
 {
 	mfc_book_management = 0,
-	mfc_record_management, 
+	mfc_record_management,
 	mfc_wine_management,
-	mfc_employee_management, 
+	mfc_employee_management,
 	mfc_test
 };
 
@@ -59,20 +66,26 @@ private:
 	unsigned char readData[1024];
 	unsigned short readLength = 0;
 
-	BOOL m_flagReadContinue;
-	BOOL m_flagDBConnection;
-	BOOL m_flagRFIDConnection;
-	BOOL m_flagReadCardWorkingThread;
-
-	string m_db_name[10] = {"mfc_book_management", "mfc_record_management", "mfc_wine_management", "mfc_employee_management", "mfc_test"};
-	string m_strCurrentDBName;
-	CString m_strRfid;
-	CString m_strStuffTitle;
-
-	CWinThread* m_pThread;
-	CRect m_image_rect;  // Picture Control의 위치를 기억할 변수
-	CImage m_image;  // 사용자가 선택한 이미지 객체를 구성할 변수
 	CComboBox m_ctrlDBcomboBox;
+	CWinThread* m_pThread;
+
+	BOOL m_flagReadCardWorkingThread;
+	BOOL m_flagAuthority;
+	BOOL m_flagRFIDConnection;
+	BOOL m_flagDBConnection;
+	BOOL m_flagReadContinue;
+
+	string m_db_name[10] = { "mfc_book_management", "mfc_record_management", "mfc_wine_management", "mfc_employee_management", "mfc_test" };
+	string m_strCurrentDBName;
+	CString m_strCardUID;
+	CString m_strStuffName;
+	CString m_strUserName;
+	CString m_strUserAuthority;
+
+	CRect m_stuff_image_rect;  // Picture Control의 위치를 기억할 변수
+	CRect m_user_image_rect;
+	CImage m_stuff_image;  // 사용자가 선택한 이미지 객체를 구성할 변수
+	CImage m_user_image;
 
 protected:
 	DECLARE_MESSAGE_MAP()
@@ -80,14 +93,17 @@ protected:
 
 	virtual void DoDataExchange(CDataExchange* pDX);
 	virtual BOOL OnInitDialog();
-	afx_msg void OnSysCommand(UINT nID, LPARAM lParam);
-	afx_msg void OnPaint();
 	afx_msg HCURSOR OnQueryDragIcon();
-	afx_msg void OnReadOnce();
-	afx_msg void OnReadContinue();
+	afx_msg void OnSysCommand(UINT nID, LPARAM lParam);
+	afx_msg void OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDrawItemStruct);
+	afx_msg void OnPaint();
+	afx_msg void OnBnClickedAboutDlg();
 	afx_msg void OnBnClickedRfidConnection();
 	afx_msg void OnCbnSelchangeDbSelectCombo();
-	afx_msg void OnClickedAbout();
+	afx_msg void OnBnClickReadOnce();
+	afx_msg void OnBnClickReadContinue();
+	afx_msg void OnBnClickedReadUser();
+	afx_msg void OnBnClickedUserUnauthorize();
 
 public:
 	CRFIDDlg(CWnd* pParent = nullptr);
@@ -95,16 +111,15 @@ public:
 #ifdef AFX_DESIGN_TIME
 	enum { IDD = IDD_RFID_DIALOG };
 #endif
-	void AttachDB(string& DBName);
-	void DetachDB(string& DBName);
-	void RunSQL(CString card_uid, CString& title, CString& img_path);
-	void PrintImage(CString img_path);
-
+	BOOL get_m_flagReadCardWorkingThread();
 	BOOL OnConnect();
 	BOOL OnDisconnect();
-	BOOL get_m_flagReadCardWorkingThread();
-
-	LRESULT ReadCard(WPARAM wParam, LPARAM lParam);
-	CString ReadCardUID();
-	afx_msg void OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDrawItemStruct);
+	void AttachDB(string& DBName);
+	void DetachDB(string& DBName);
+	BOOL RunStuffQuery(CString card_uid, CString& title, CString& img_path);
+	BOOL RunUserQuery(CString card_uid, CString& name, CString& authority, CString& img_path);
+	CString ReadCardUID(uint8_t ISO_type);
+	LRESULT ReadStuffCard(WPARAM wParam, LPARAM lParam);
+	LRESULT ReadUserCard(WPARAM wParam, LPARAM lParam);
+	void PrintImage(CString img_path, CImage& image_instance, CRect& image_rect);
 };

@@ -31,18 +31,19 @@ static UINT ThreadForReading(LPVOID param)
   desc: CRFIDDlg 클래스-인스턴스 메세지 맵핑
 */
 BEGIN_MESSAGE_MAP(CRFIDDlg, CDialogEx)
-	ON_WM_SYSCOMMAND()
-	ON_WM_PAINT()
 	ON_WM_QUERYDRAGICON()
+	ON_WM_SYSCOMMAND()
 	ON_WM_DRAWITEM()
+	ON_WM_PAINT()
 
-	ON_BN_CLICKED(IDC_READ_ONCE, &CRFIDDlg::OnReadOnce)
-	ON_BN_CLICKED(IDC_READ_CONTINUE, &CRFIDDlg::OnReadContinue)
+	ON_BN_CLICKED(IDC_ABOUT, &CRFIDDlg::OnBnClickedAboutDlg)
 	ON_BN_CLICKED(IDC_RFID_CONNECTION, &CRFIDDlg::OnBnClickedRfidConnection)
-	ON_BN_CLICKED(IDC_ABOUT, &CRFIDDlg::OnClickedAbout)
 	ON_CBN_SELCHANGE(IDC_DB_SELECT_COMBO, &CRFIDDlg::OnCbnSelchangeDbSelectCombo)
-
-	ON_MESSAGE(MESSAGE_READ_CARD, &CRFIDDlg::ReadCard) // kenGwon: 사용자정의 메세지 추가
+	ON_BN_CLICKED(IDC_READ_ONCE, &CRFIDDlg::OnBnClickReadOnce)
+	ON_BN_CLICKED(IDC_READ_CONTINUE, &CRFIDDlg::OnBnClickReadContinue)
+	ON_BN_CLICKED(IDC_READ_USER, &CRFIDDlg::OnBnClickedReadUser)
+	ON_BN_CLICKED(IDC_USER_UNAUTHORIZE, &CRFIDDlg::OnBnClickedUserUnauthorize)
+	ON_MESSAGE(MESSAGE_READ_CARD, &CRFIDDlg::ReadStuffCard) // kenGwon: 사용자정의 메세지 "MESSAGE_READ_CARD"
 END_MESSAGE_MAP()
 
 /*
@@ -50,12 +51,15 @@ END_MESSAGE_MAP()
 */
 CRFIDDlg::CRFIDDlg(CWnd* pParent /*=nullptr*/)
 	: CDialogEx(IDD_RFID_DIALOG, pParent)
-	, m_strRfid(_T(""))
-	, m_strStuffTitle(_T(""))
+	, m_strCardUID(_T(""))
+	, m_strStuffName(_T(""))
+	, m_strUserName(_T(""))
+	, m_strUserAuthority(_T(""))
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_kenGwon);
 
 	// 플래그 초기화
+	m_flagAuthority = FALSE;
 	m_flagReadContinue = FALSE;
 	m_flagDBConnection = FALSE;
 	m_flagRFIDConnection = FALSE;
@@ -64,8 +68,8 @@ CRFIDDlg::CRFIDDlg(CWnd* pParent /*=nullptr*/)
 	// 변수 초기화
 	past_card_uid = _T(""); // static 전역변수
 	m_strCurrentDBName = "";
-	m_strRfid = _T("");
-	m_strStuffTitle = _T("");
+	m_strCardUID = _T("");
+	m_strStuffName = _T("");
 	m_pThread = nullptr;
 
 	/* 아래 멤버변수는 OnInitDialog()에서 초기화
@@ -90,9 +94,11 @@ CRFIDDlg::~CRFIDDlg()
 void CRFIDDlg::DoDataExchange(CDataExchange* pDX)
 {
 	CDialogEx::DoDataExchange(pDX);
-	DDX_Text(pDX, IDC_EDIT1, m_strRfid);
-	DDX_Text(pDX, IDC_EDIT2, m_strStuffTitle);
+	DDX_Text(pDX, IDC_EDIT1, m_strCardUID);
+	DDX_Text(pDX, IDC_EDIT2, m_strStuffName);
 	DDX_Control(pDX, IDC_DB_SELECT_COMBO, m_ctrlDBcomboBox);
+	DDX_Text(pDX, IDC_EDIT3, m_strUserName);
+	DDX_Text(pDX, IDC_EDIT4, m_strUserAuthority);
 }
 
 /*
@@ -135,14 +141,12 @@ BOOL CRFIDDlg::OnInitDialog()
 	m_ctrlDBcomboBox.AddString(_T("도서관리"));
 	m_ctrlDBcomboBox.AddString(_T("음반관리"));
 	m_ctrlDBcomboBox.AddString(_T("와인관리"));
-	m_ctrlDBcomboBox.AddString(_T("출입관리"));
 
-	// Print Control에 IDLE 상태의 로고 이미지를 출력한다.
+	// 물건을 보여주는 Picture Control에 IDLE 상태의 로고 이미지를 출력한다.
 	GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(70, 125, 345, 195);
-	Invalidate(TRUE);
-	GetDlgItem(IDC_STUFF_PICTURE)->GetWindowRect(m_image_rect);
-	ScreenToClient(m_image_rect);
-	PrintImage(_T("img\\IDE_logo.bmp"));
+	GetDlgItem(IDC_STUFF_PICTURE)->GetWindowRect(m_stuff_image_rect);
+	ScreenToClient(m_stuff_image_rect);
+	PrintImage(_T("img\\IDE_logo.bmp"), m_stuff_image, m_stuff_image_rect);
 
 	// Edit Control에 안내 메세지를 적는다.
 	SetDlgItemText(IDC_EDIT1, _T("여기에 카드UID 출력"));
@@ -150,14 +154,29 @@ BOOL CRFIDDlg::OnInitDialog()
 
 	// Edit Control의 폰트 사이즈를 키운다.
 	CFont font1, font2;
-	font1.CreatePointFont(180, _T("굴림"));
-	font2.CreatePointFont(120, _T("굴림"));
+	font1.CreatePointFont(180, _T("고딕"));
+	font2.CreatePointFont(120, _T("고딕"));
 	GetDlgItem(IDC_EDIT1)->SetFont(&font1);
 	GetDlgItem(IDC_EDIT2)->SetFont(&font2);
+	GetDlgItem(IDC_RFID_STATUS)->SetFont(&font2);
+	GetDlgItem(IDC_CATEGORY_TEXT)->SetFont(&font2);
 	font1.Detach();
 	font2.Detach();
 
+	// 관리자를 보여주는 Picture Control에 이미지를 출력한다.
+	GetDlgItem(IDC_USER_PICTURE)->GetWindowRect(m_user_image_rect);
+	ScreenToClient(m_user_image_rect);
+	PrintImage(_T("img\\IDE_user.bmp"), m_user_image, m_user_image_rect);
+
 	return TRUE;  // 포커스를 컨트롤에 설정하지 않으면 TRUE를 반환합니다.
+}
+
+/* <Message Mapped Function>
+  desc: 사용자가 최소화된 창을 끄는 동안에 커서가 표시되도록 시스템에서 이 함수를 호출합니다.
+*/
+HCURSOR CRFIDDlg::OnQueryDragIcon()
+{
+	return static_cast<HCURSOR>(m_hIcon);
 }
 
 /*
@@ -176,7 +195,131 @@ void CRFIDDlg::OnSysCommand(UINT nID, LPARAM lParam)
 	}
 }
 
-/*
+/* <Message Mapped Function>
+  desc: 소유자 그리기(Owner Draw) 옵션을 True로 준 컴포넌트에 한하여 컴포넌트 디자인 재설정
+		(재설정된 컴포넌트ID: IDC_RFID_CONNECTION, IDC_READ_CONTINUE, IDC_READ_ONCE)
+*/
+void CRFIDDlg::OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDrawItemStruct)
+{
+	if (nIDCtl == IDC_RFID_CONNECTION)
+	{
+		if (lpDrawItemStruct->itemAction & ODA_DRAWENTIRE || lpDrawItemStruct->itemAction & ODA_FOCUS || lpDrawItemStruct->itemAction & ODA_SELECT)
+		{
+			CDC* pDC = CDC::FromHandle(lpDrawItemStruct->hDC);
+
+			if (m_flagRFIDConnection)
+			{
+				pDC->FillSolidRect(&lpDrawItemStruct->rcItem, RGB(144, 238, 144)); // 연초록색
+				pDC->Draw3dRect(&lpDrawItemStruct->rcItem, RGB(128, 128, 128), RGB(125, 125, 125));
+			}
+			else
+			{
+				pDC->FillSolidRect(&lpDrawItemStruct->rcItem, RGB(225, 225, 225));
+				pDC->Draw3dRect(&lpDrawItemStruct->rcItem, RGB(128, 128, 128), RGB(125, 125, 125));
+			}
+
+			pDC->SetTextColor(RGB(0, 0, 0));
+			pDC->SetBkMode(TRANSPARENT);
+			pDC->DrawText(_T("RFID 연결 toggle"), 14, &lpDrawItemStruct->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+		}
+	}
+
+	if (nIDCtl == IDC_READ_CONTINUE)
+	{
+		if (m_flagAuthority)
+		{
+			GetDlgItem(IDC_READ_CONTINUE)->EnableWindow(TRUE);
+
+			if (lpDrawItemStruct->itemAction & ODA_DRAWENTIRE || lpDrawItemStruct->itemAction & ODA_FOCUS || lpDrawItemStruct->itemAction & ODA_SELECT)
+			{
+				CDC* pDC = CDC::FromHandle(lpDrawItemStruct->hDC);
+
+				pDC->SetTextColor(RGB(0, 0, 0));
+				pDC->SetBkMode(TRANSPARENT);
+
+				if (m_flagReadContinue)
+				{
+					pDC->FillSolidRect(&lpDrawItemStruct->rcItem, RGB(236, 230, 204)); // 아이보리색
+					pDC->Draw3dRect(&lpDrawItemStruct->rcItem, RGB(128, 128, 128), RGB(125, 125, 125));
+					pDC->DrawText(_T("계속읽기 진행중"), 8, &lpDrawItemStruct->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+				}
+				else
+				{
+					pDC->FillSolidRect(&lpDrawItemStruct->rcItem, RGB(225, 225, 225));
+					pDC->Draw3dRect(&lpDrawItemStruct->rcItem, RGB(128, 128, 128), RGB(125, 125, 125));
+					pDC->DrawText(_T("계속읽기"), 4, &lpDrawItemStruct->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+				}
+			}
+		}
+		else
+		{
+			GetDlgItem(IDC_READ_CONTINUE)->EnableWindow(FALSE);
+
+			if (lpDrawItemStruct->itemAction & ODA_DRAWENTIRE || lpDrawItemStruct->itemAction & ODA_FOCUS || lpDrawItemStruct->itemAction & ODA_SELECT)
+			{
+				CDC* pDC = CDC::FromHandle(lpDrawItemStruct->hDC);
+
+				pDC->FillSolidRect(&lpDrawItemStruct->rcItem, RGB(255, 255, 255));
+				pDC->Draw3dRect(&lpDrawItemStruct->rcItem, RGB(185, 185, 185), RGB(185, 185, 185));
+				pDC->SetTextColor(RGB(185, 185, 185));
+				pDC->SetBkMode(TRANSPARENT);
+				pDC->DrawText(_T("계속읽기"), 4, &lpDrawItemStruct->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+			}
+		}
+	}
+
+	if (nIDCtl == IDC_READ_ONCE)
+	{
+
+		if (m_flagAuthority)
+		{
+			GetDlgItem(IDC_READ_ONCE)->EnableWindow(TRUE);
+
+			if (lpDrawItemStruct->itemAction & ODA_DRAWENTIRE || lpDrawItemStruct->itemAction & ODA_FOCUS || lpDrawItemStruct->itemAction & ODA_SELECT)
+			{
+				if (lpDrawItemStruct->itemAction & ODA_SELECT)
+				{
+					CDC* pDC = CDC::FromHandle(lpDrawItemStruct->hDC);
+
+					pDC->FillSolidRect(&lpDrawItemStruct->rcItem, RGB(236, 230, 204)); // 아이보리색
+					pDC->Draw3dRect(&lpDrawItemStruct->rcItem, RGB(128, 128, 128), RGB(125, 125, 125));
+					pDC->SetTextColor(RGB(0, 0, 0));
+					pDC->SetBkMode(TRANSPARENT);
+					pDC->DrawText(_T("1회 읽기"), 5, &lpDrawItemStruct->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+				}
+				else
+				{
+					CDC* pDC = CDC::FromHandle(lpDrawItemStruct->hDC);
+
+					pDC->FillSolidRect(&lpDrawItemStruct->rcItem, RGB(225, 225, 225));
+					pDC->Draw3dRect(&lpDrawItemStruct->rcItem, RGB(128, 128, 128), RGB(125, 125, 125));
+					pDC->SetTextColor(RGB(0, 0, 0));
+					pDC->SetBkMode(TRANSPARENT);
+					pDC->DrawText(_T("1회 읽기"), 5, &lpDrawItemStruct->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+				}
+			}
+		}
+		else
+		{
+			GetDlgItem(IDC_READ_ONCE)->EnableWindow(FALSE);
+
+			if (lpDrawItemStruct->itemAction & ODA_DRAWENTIRE || lpDrawItemStruct->itemAction & ODA_FOCUS || lpDrawItemStruct->itemAction & ODA_SELECT)
+			{
+				CDC* pDC = CDC::FromHandle(lpDrawItemStruct->hDC);
+
+				pDC->FillSolidRect(&lpDrawItemStruct->rcItem, RGB(255, 255, 255));
+				pDC->Draw3dRect(&lpDrawItemStruct->rcItem, RGB(185, 185, 185), RGB(185, 185, 185));
+				pDC->SetTextColor(RGB(185, 185, 185));
+				pDC->SetBkMode(TRANSPARENT);
+				pDC->DrawText(_T("1회 읽기"), 5, &lpDrawItemStruct->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+			}
+		}
+	}
+
+	CDialogEx::OnDrawItem(nIDCtl, lpDrawItemStruct);
+}
+
+/* <Message Mapped Function>
   desc: 대화 상자에 최소화 단추를 추가할 경우 아이콘을 그리려면 아래 코드가 필요합니다.
 		문서/뷰 모델을 사용하는 MFC 애플리케이션의 경우에는 프레임워크에서 이 작업을 자동으로 수행합니다.
 */
@@ -205,26 +348,176 @@ void CRFIDDlg::OnPaint()
 	{
 		CDialogEx::OnPaint();
 
-		if (!m_image.IsNull())
+		dc.SetStretchBltMode(COLORONCOLOR); // 이미지를 축소나 확대를 경우 생기는 손실을 보정
+		
+		if (!m_stuff_image.IsNull())
 		{
-			dc.SetStretchBltMode(COLORONCOLOR); // 이미지를 축소나 확대를 경우 생기는 손실을 보정
-			m_image.Draw(dc, m_image_rect); // 그림을 Picture Control 크기로 화면에 출력한다.
+			m_stuff_image.Draw(dc, m_stuff_image_rect); // 그림을 Picture Control 크기로 화면에 출력한다.	
+		}
+		if (!m_user_image.IsNull())
+		{
+			m_user_image.Draw(dc, m_user_image_rect); // 그림을 Picture Control 크기로 화면에 출력한다.
 		}
 	}
 }
 
-/*
-  desc: 사용자가 최소화된 창을 끄는 동안에 커서가 표시되도록 시스템에서 이 함수를 호출합니다.
+/* <Message Mapped Function>
+  desc: 프로그램 정보 다이얼로그를 띄운다.
 */
-HCURSOR CRFIDDlg::OnQueryDragIcon()
+void CRFIDDlg::OnBnClickedAboutDlg()
 {
-	return static_cast<HCURSOR>(m_hIcon);
+	CAboutDlg aboutDlg;
+	aboutDlg.DoModal();
+}
+
+/* <Message Mapped Function>
+  desc: RFID 연결 여부를 토글할 목적으로 생성된 "RFID연결" 버튼 컴포넌트가 발생시키는 클릭 메세지에 대응하는 함수
+*/
+void CRFIDDlg::OnBnClickedRfidConnection()
+{
+	// "계속읽기"가 실행중이였다면, 해당 기능을 중단
+	if (m_flagReadContinue)
+	{
+		m_flagReadContinue = FALSE;
+		m_flagReadCardWorkingThread = FALSE;
+		WaitForSingleObject(m_pThread->m_hThread, 5000);
+		SetDlgItemText(IDC_READ_CONTINUE, _T("계속읽기"));
+	}
+
+	if (m_flagRFIDConnection == FALSE)
+	{
+		if (OnConnect())
+		{
+			m_flagRFIDConnection = TRUE;
+			PlaySoundW(_T("sound\\DeviceConnect.wav"), NULL, SND_FILENAME | SND_ASYNC);
+			SetDlgItemText(IDC_RFID_STATUS, _T("RFID status: Connect!!!"));
+			SetDlgItemText(IDC_RFID_CONNECTION, _T("RFID 해제"));
+			MessageBox(_T("정상적으로 RFID 연결에 성공했습니다."));
+		}
+		else
+		{
+			AfxMessageBox(_T("RFID 연결에 실패했습니다!"));
+		}
+	}
+	else
+	{
+		if (OnDisconnect())
+		{
+			m_flagRFIDConnection = FALSE;
+			PlaySoundW(_T("sound\\DeviceDisconnect.wav"), NULL, SND_FILENAME | SND_ASYNC);
+			SetDlgItemText(IDC_RFID_STATUS, _T("RFID status: Disconnect..."));
+			SetDlgItemText(IDC_RFID_CONNECTION, _T("RFID 연결"));
+			MessageBox(_T("정상적으로 RFID 연결이 해제되었습니다."));
+		}
+		else
+		{
+			AfxMessageBox(_T("RFID 연결해제에 실패했습니다!"));
+		}
+	}
+}
+
+/* <Message Mapped Function>
+  desc: 프로그램 카테고리 선택에 관련된 ComboBox 값을 select하면 발생하는 메세지에 대응하는 함수
+		1. 콤보박스의 값을 변경하면, 이전 값에 대응하는 DB 연결을 끊고, 새로운 값에 대응하는 DB를 연결한다.
+		2. 콤보박스의 값을 변경하면, picture control의 크기를 변경된 DB의 이미지 출력 사이즈에 맞게 조정한다.
+*/
+void CRFIDDlg::OnCbnSelchangeDbSelectCombo()
+{
+	// "계속읽기"가 실행중이였다면, 해당 기능을 중단
+	if (m_flagReadContinue)
+	{
+		m_flagReadContinue = FALSE;
+		m_flagReadCardWorkingThread = FALSE;
+		WaitForSingleObject(m_pThread->m_hThread, 5000);
+		SetDlgItemText(IDC_READ_CONTINUE, _T("계속읽기"));
+	}
+
+	DetachDB(m_strCurrentDBName); // 이전 DB의 연결을 끊는다.
+	past_card_uid = _T(""); // DB가 바뀌었으므로, past_card_uid값을 초기화해준다.
+	m_flagAuthority = FALSE; // DB가 바뀌었으므로, 관리자 권한 플래그도 초기화해준다.
+	SetDlgItemText(IDC_READ_ONCE, _T("1회 읽기")); // 임시 owner draw 호출용 메세지 생성
+	SetDlgItemText(IDC_READ_CONTINUE, _T("계속읽기")); // 임시 owner draw 호출용 메세지 생성
+
+	UpdateData(TRUE);
+	CString CBox_select;
+	m_ctrlDBcomboBox.GetLBText(m_ctrlDBcomboBox.GetCurSel(), CBox_select);
+
+	if (CBox_select == _T("IDLE"))
+	{
+		// 변수 초기화
+		m_strCurrentDBName = "";
+		m_strCardUID = _T("");
+		m_strStuffName = _T("");
+		m_strUserName = _T("");
+		m_strUserAuthority = _T("");
+
+		// Print Control에 IDLE 상태의 로고 이미지를 출력한다.
+		GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(70, 125, 345, 195);
+		Invalidate(TRUE);
+		GetDlgItem(IDC_STUFF_PICTURE)->GetWindowRect(m_stuff_image_rect);
+		ScreenToClient(m_stuff_image_rect);
+		PrintImage(_T("img\\IDE_logo.bmp"), m_stuff_image, m_stuff_image_rect);
+
+		GetDlgItem(IDC_USER_PICTURE)->GetWindowRect(m_user_image_rect);
+		ScreenToClient(m_user_image_rect);
+		PrintImage(_T("img\\IDE_user.bmp"), m_user_image, m_user_image_rect);
+
+		// Edit Control에 안내 메세지를 적는다.
+		SetDlgItemText(IDC_EDIT1, _T("여기에 카드UID 출력"));
+		SetDlgItemText(IDC_EDIT2, _T("여기에 물품이름 출력"));
+
+		return; // 함수 리턴.
+	}
+	else if (CBox_select == _T("도서관리"))
+	{
+		m_strCurrentDBName = m_db_name[mfc_book_management];
+		GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(120, 70, 240, 320);
+		SetDlgItemText(IDC_TITLE_NAME, _T("Title:"));
+	}
+	else if (CBox_select == _T("음반관리"))
+	{
+		m_strCurrentDBName = m_db_name[mfc_record_management];
+		GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(100, 80, 300, 300);
+		SetDlgItemText(IDC_TITLE_NAME, _T("Title:"));
+	}
+	else if (CBox_select == _T("와인관리"))
+	{
+		m_strCurrentDBName = m_db_name[mfc_wine_management];
+		GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(150, 70, 180, 320);
+		SetDlgItemText(IDC_TITLE_NAME, _T("Name:"));
+	}
+	else
+	{
+		AfxMessageBox(_T("error occured in ComboBox!!!"));
+		printf("error occured in ComboBox!!!\n");
+		return;
+	}
+
+	// picture control의 모양을 변경하고 비운다.
+	Invalidate(TRUE);
+	GetDlgItem(IDC_STUFF_PICTURE)->GetWindowRect(m_stuff_image_rect);
+	ScreenToClient(m_stuff_image_rect);
+	m_stuff_image.~CImage();
+
+	GetDlgItem(IDC_USER_PICTURE)->GetWindowRect(m_user_image_rect);
+	ScreenToClient(m_user_image_rect);
+	m_user_image.~CImage();
+
+	// Edit Control을 비운다.
+	m_strCardUID = _T("");
+	m_strStuffName = _T("");
+	m_strUserName = _T("");
+	m_strUserAuthority = _T("");
+	UpdateData(FALSE);
+
+	PlaySoundW(_T("sound\\ChangeAlert.wav"), NULL, SND_FILENAME | SND_ASYNC);
+	AttachDB(m_strCurrentDBName); // 새로운 DB를 연결한다.
 }
 
 /* <Message Mapped Function>
   desc: "1회 읽기" 버튼 컴포넌트가 발생시키는 클릭 메세지에 대응하는 함수
 */
-void CRFIDDlg::OnReadOnce()
+void CRFIDDlg::OnBnClickReadOnce()
 {
 	// "계속읽기"모드 실행중인 경우 경고문구를 띄우고 함수 종료
 	if (m_flagReadContinue == TRUE)
@@ -250,14 +543,14 @@ void CRFIDDlg::OnReadOnce()
 	}
 	else
 	{
-		ReadCard(NULL, NULL);
+		ReadStuffCard(NULL, NULL);
 	}
 }
 
 /* <Message Mapped Function>
   desc: "계속읽기" 버튼 컴포넌트가 발생시키는 클릭 메세지에 대응하는 함수
 */
-void CRFIDDlg::OnReadContinue()
+void CRFIDDlg::OnBnClickReadContinue()
 {
 	if (!m_flagRFIDConnection || !m_flagDBConnection)
 	{
@@ -285,69 +578,47 @@ void CRFIDDlg::OnReadContinue()
 		{
 			m_flagReadCardWorkingThread = TRUE;
 			m_pThread = AfxBeginThread(ThreadForReading, this);
-			SetDlgItemText(IDC_READ_CONTINUE, _T("계속읽기 ing..")); 
+			SetDlgItemText(IDC_READ_CONTINUE, _T("계속읽기 ing.."));
 		}
 		else
 		{
 			m_flagReadCardWorkingThread = FALSE;
 			WaitForSingleObject(m_pThread->m_hThread, 5000);
-			SetDlgItemText(IDC_READ_CONTINUE, _T("계속읽기")); 
+			SetDlgItemText(IDC_READ_CONTINUE, _T("계속읽기"));
 		}
 	}
 }
 
 /* <Message Mapped Function>
-  desc: RFID 연결 여부를 토글할 목적으로 생성된 "RFID연결" 버튼 컴포넌트가 발생시키는 클릭 메세지에 대응하는 함수
+  desc: "관리자 카드 읽기" 버튼 컴포넌트가 발생시키는 클릭 메세지에 대응하는 함수
 */
-void CRFIDDlg::OnBnClickedRfidConnection()
+void CRFIDDlg::OnBnClickedReadUser()
 {
-	// "계속읽기"가 실행중이였다면, 해당 기능을 중단
-	if (m_flagReadContinue)
+	if (!m_flagRFIDConnection || !m_flagDBConnection)
 	{
-		m_flagReadContinue = FALSE;
-		m_flagReadCardWorkingThread = FALSE;
-		WaitForSingleObject(m_pThread->m_hThread, 5000);
-		SetDlgItemText(IDC_READ_CONTINUE, _T("계속읽기"));
-	}
-
-	if (m_flagRFIDConnection == FALSE)
-	{
-		if (OnConnect())
+		if (!m_flagRFIDConnection && !m_flagDBConnection)
 		{
-			PlaySoundW(_T("sound\\DeviceConnect.wav"), NULL, SND_FILENAME | SND_ASYNC);
-			m_flagRFIDConnection = TRUE;
-			SetDlgItemText(IDC_RFID_STATUS, _T("RFID status: Connect!!!"));
-			SetDlgItemText(IDC_RFID_CONNECTION, _T("RFID 해제"));
-			MessageBox(_T("정상적으로 RFID 연결에 성공했습니다."));
+			AfxMessageBox(_T("1. RFID를 연결하십시오.\n2. 관리 카테고리를 선택하십시오."));
 		}
-		else
+		else if (!m_flagRFIDConnection)
 		{
-			AfxMessageBox(_T("RFID 연결에 실패했습니다!"));
+			AfxMessageBox(_T("RFID를 연결하십시오."));
+		}
+		else if (!m_flagDBConnection)
+		{
+			AfxMessageBox(_T("관리 카테고리를 선택하십시오."));
 		}
 	}
 	else
 	{
-		if (OnDisconnect())
-		{
-			PlaySoundW(_T("sound\\DeviceDisconnect.wav"), NULL, SND_FILENAME | SND_ASYNC);
-			m_flagRFIDConnection = FALSE;
-			SetDlgItemText(IDC_RFID_STATUS, _T("RFID status: Disconnect..."));
-			SetDlgItemText(IDC_RFID_CONNECTION, _T("RFID 연결"));
-			MessageBox(_T("정상적으로 RFID 연결이 해제되었습니다."));
-		}
-		else
-		{
-			AfxMessageBox(_T("RFID 연결해제에 실패했습니다!"));
-		}
+		ReadUserCard(NULL, NULL);
 	}
 }
 
 /* <Message Mapped Function>
-  desc: 프로그램 카테고리 선택에 관련된 ComboBox 값을 select하면 발생하는 메세지에 대응하는 함수
-		1. 콤보박스의 값을 변경하면, 이전 값에 대응하는 DB 연결을 끊고, 새로운 값에 대응하는 DB를 연결한다.
-		2. 콤보박스의 값을 변경하면, picture control의 크기를 변경된 DB의 이미지 출력 사이즈에 맞게 조정한다.
+  desc: "인증 해제" 버튼 컴포넌트가 발생시키는 클릭 메세지에 대응하는 함수
 */
-void CRFIDDlg::OnCbnSelchangeDbSelectCombo()
+void CRFIDDlg::OnBnClickedUserUnauthorize()
 {
 	// "계속읽기"가 실행중이였다면, 해당 기능을 중단
 	if (m_flagReadContinue)
@@ -358,186 +629,34 @@ void CRFIDDlg::OnCbnSelchangeDbSelectCombo()
 		SetDlgItemText(IDC_READ_CONTINUE, _T("계속읽기"));
 	}
 	
-	DetachDB(m_strCurrentDBName); // 이전 DB의 연결을 끊는다.
-	past_card_uid = _T(""); // DB가 바뀌었으므로, past_card_uid값을 초기화해준다.
-
-	UpdateData(TRUE);
-	CString CBox_select;
-	m_ctrlDBcomboBox.GetLBText(m_ctrlDBcomboBox.GetCurSel(), CBox_select);
-
-	if (CBox_select == _T("IDLE"))
+	if (m_flagAuthority)
 	{
-		// 변수 초기화
-		m_strCurrentDBName = "";
-		m_strRfid = _T("");
-		m_strStuffTitle = _T("");
+		m_flagAuthority = FALSE;
+		SetDlgItemText(IDC_READ_ONCE, _T("1회 읽기")); // 임시 owner draw 호출용 메세지 생성
+		SetDlgItemText(IDC_READ_CONTINUE, _T("계속읽기")); // 임시 owner draw 호출용 메세지 생성
+		m_strUserName = _T("");
+		m_strUserAuthority = _T("");
 
-		// Print Control에 IDLE 상태의 로고 이미지를 출력한다.
-		GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(70, 125, 345, 195);
-		Invalidate(TRUE);
-		GetDlgItem(IDC_STUFF_PICTURE)->GetWindowRect(m_image_rect);
-		ScreenToClient(m_image_rect);
-		PrintImage(_T("img\\IDE_logo.bmp"));
+		GetDlgItem(IDC_USER_PICTURE)->GetWindowRect(m_user_image_rect);
+		ScreenToClient(m_user_image_rect);
+		PrintImage(_T("img\\IDE_user.bmp"), m_user_image, m_user_image_rect);
 
-		// Edit Control에 안내 메세지를 적는다.
-		SetDlgItemText(IDC_EDIT1, _T("여기에 카드UID 출력"));
-		SetDlgItemText(IDC_EDIT2, _T("여기에 물품이름 출력"));
-
-		return; // 함수 리턴.
-	}
-	else if (CBox_select == _T("도서관리"))
-	{
-		m_strCurrentDBName = m_db_name[mfc_book_management];
-		GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(120, 70, 240, 320);
-		SetDlgItemText(IDC_TITLE_NAME, _T("Title:"));
-
-	}
-	else if (CBox_select == _T("음반관리"))
-	{
-		m_strCurrentDBName = m_db_name[mfc_record_management];
-		GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(90, 70, 300, 300);
-		SetDlgItemText(IDC_TITLE_NAME, _T("Title:"));
-	}
-	else if (CBox_select == _T("와인관리"))
-	{
-		m_strCurrentDBName = m_db_name[mfc_wine_management];
-		GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(150, 70, 180, 320);
-		SetDlgItemText(IDC_TITLE_NAME, _T("Name:"));
-	}
-	else if (CBox_select == _T("출입관리"))
-	{
-		m_strCurrentDBName = m_db_name[mfc_employee_management];
-		GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(80, 70, 320, 180);
-		SetDlgItemText(IDC_TITLE_NAME, _T("Name:"));
+		PlaySoundW(_T("sound\\DeviceDisconnect.wav"), NULL, SND_FILENAME | SND_ASYNC);
+		MessageBox(_T("사용자 인증이 해제되었습니다.\n다시 사용하려면 다시 관리자 카드를 읽어주세요."));
 	}
 	else
 	{
-		AfxMessageBox(_T("error occured in ComboBox!!!"));
-		printf("error occured in ComboBox!!!\n");
-		return;
+		AfxMessageBox(_T("해제할 관리자 인증이 없습니다."));
 	}
-
-	// picture control의 크기를 변경하고, 기존의 이미지를 지운다.
-	Invalidate(TRUE);
-	GetDlgItem(IDC_STUFF_PICTURE)->GetWindowRect(m_image_rect);
-	ScreenToClient(m_image_rect);
-	m_image.~CImage();
-
-	// IDC_EDIT1, IDC_EDIT2를 비운다.
-	SetDlgItemText(IDC_EDIT1, _T(""));
-	SetDlgItemText(IDC_EDIT2, _T(""));
-
-	PlaySoundW(_T("sound\\ChangeAlert.wav"), NULL, SND_FILENAME | SND_ASYNC);
-	AttachDB(m_strCurrentDBName); // 새로운 DB를 연결한다.
-}
-
-/* <Message Mapped Function>
-  desc: 프로그램 정보 다이얼로그를 띄운다.
-*/
-void CRFIDDlg::OnClickedAbout()
-{
-	CAboutDlg aboutDlg;
-	aboutDlg.DoModal();
 }
 
 /*
-  desc: DB를 연결한다.
-  param: 연결할 DB의 name
+  desc: 클래스 멤버변수 m_flagReadCardWorkingThread의 값을 리턴한다.
+  return: TRUE/FALSE
 */
-void CRFIDDlg::AttachDB(string& DBName)
+BOOL CRFIDDlg::get_m_flagReadCardWorkingThread()
 {
-	m_flagDBConnection = TRUE;
-	mysql_init(&Connect); // Connect는 pre-compiled header에 전역변수로 정의되어 있음.
-
-	if (mysql_real_connect(&Connect, CONNECT_IP, DB_USER, DB_PASSWORD, DBName.c_str(), DB_PORT, NULL, 0))
-	{
-		printf("%s DB 연결성공!!!\n", DBName.c_str());
-	}
-	else
-	{
-		AfxMessageBox(_T("DB연결에 실패했습니다.\nDB서버 개방여부 확인하십시오."));
-		printf("%s DB 연결실패...\n", DBName.c_str());
-	}
-
-	mysql_query(&Connect, "SET Names euckr"); // DB 문자 인코딩을 euckr로 셋팅
-}
-
-/*
-  desc: DB를 연결을 해제한다.
-  param: 연결할 DB의 name
-*/
-void CRFIDDlg::DetachDB(string& DBName)
-{
-	m_flagDBConnection = FALSE;
-	printf("%s DB 연결해제...\n", DBName.c_str());
-	mysql_close(&Connect);
-}
-
-/*
-  desc: RFID로 읽은 card_uid를 바탕으로 DB에서 card_uid에 해당하는 title과 img_path를 가져온다.
-  param1: card_uid
-  param2: SQL로 DB에서 얻어온 값을 넣어줄 참조변수 title
-  param3: SQL로 DB에서 얻어온 값을 넣어줄 참조변수 img_path
-*/
-void CRFIDDlg::RunSQL(CString card_uid, CString& title, CString& img_path)
-{
-	string select_columns, table_name;
-
-	if (m_strCurrentDBName == m_db_name[mfc_book_management])
-	{
-		select_columns = "title, img_path";
-		table_name = "book";
-	}
-	else if (m_strCurrentDBName == m_db_name[mfc_record_management])
-	{
-		select_columns = "title, img_path";
-		table_name = "record";
-	}
-	else if (m_strCurrentDBName == m_db_name[mfc_wine_management])
-	{
-		select_columns = "name, img_path";
-		table_name = "wine";
-	}
-	else if (m_strCurrentDBName == m_db_name[mfc_employee_management])
-	{
-		select_columns = "name, img_path";
-		table_name = "employee";
-	}
-
-	string query;
-	query = string("SELECT ") + select_columns + string(" FROM ") + table_name
-		+ string(" WHERE card_uid = '") + string(CT2CA(card_uid)) + string("';");
-
-	mysql_query(&Connect, query.c_str());
-	sql_query_result = mysql_store_result(&Connect);
-
-	if (sql_query_result == NULL)
-	{
-		AfxMessageBox(_T("error occured in RunSQL!!!"));
-		printf("쿼리 조회 실패...\n");
-	}
-	else
-	{
-		sql_row = mysql_fetch_row(sql_query_result);
-		if (sql_row != nullptr)
-		{
-			title = sql_row[0];
-			img_path = sql_row[1];
-		}
-	}
-
-	mysql_free_result(sql_query_result);
-}
-
-/*
-  desc: img_path를 바탕으로 이미지를 로드하여 Picture Control에 출력한다.
-  param: 이미지 경로
-*/
-void CRFIDDlg::PrintImage(CString img_path)
-{
-	m_image.~CImage();
-	m_image.Load(img_path);
-	InvalidateRect(m_image_rect, TRUE);
+	return this->m_flagReadCardWorkingThread;
 }
 
 /*
@@ -609,36 +728,206 @@ BOOL CRFIDDlg::OnDisconnect()
 }
 
 /*
-  desc: 클래스 멤버변수 m_flagReadCardWorkingThread의 값을 리턴한다.
-  return: TRUE/FALSE
+  desc: DB를 연결한다.
+  param: 연결할 DB의 name
 */
-BOOL CRFIDDlg::get_m_flagReadCardWorkingThread()
+void CRFIDDlg::AttachDB(string& DBName)
 {
-	return this->m_flagReadCardWorkingThread;
+	m_flagDBConnection = TRUE;
+	mysql_init(&Connect); // Connect는 pre-compiled header에 전역변수로 정의되어 있음.
+
+	if (mysql_real_connect(&Connect, CONNECT_IP, DB_USER, DB_PASSWORD, DBName.c_str(), DB_PORT, NULL, 0))
+	{
+		printf("%s DB 연결성공!!!\n", DBName.c_str());
+	}
+	else
+	{
+		AfxMessageBox(_T("DB연결에 실패했습니다.\nDB서버 개방여부 확인하십시오."));
+		printf("%s DB 연결실패...\n", DBName.c_str());
+	}
+
+	mysql_query(&Connect, "SET Names euckr"); // DB 문자 인코딩을 euckr로 셋팅
 }
 
 /*
-  desc: RFID 프로토콜을 통해 1회 통신을 시도한다.
+  desc: DB를 연결을 해제한다.
+  param: 연결할 DB의 name
+*/
+void CRFIDDlg::DetachDB(string& DBName)
+{
+	m_flagDBConnection = FALSE;
+	printf("%s DB 연결해제...\n", DBName.c_str());
+	mysql_close(&Connect);
+}
+
+/*
+  desc: RFID로 읽은 card_uid를 조건으로 설정하여 DB에서 card_uid에 해당하는 title과 img_path를 가져오는 쿼리를 실행한다.
+  param1: 쿼리 조건문에 사용될 card_uid 값
+  param2: SQL query로 DB에서 얻어온 값을 넣어줄 참조변수 title
+  param3: SQL query로 DB에서 얻어온 값을 넣어줄 참조변수 img_path
+  return: 쿼리 조회 결과 반환된 row가 0이라면 DB에 정보가 없는 것으로 판단하고 False리턴, 
+          쿼리 조회 결과 반횐된 row가 있으면 DB에 정보가 있는 것으로 판단하고 True리턴
+*/
+BOOL CRFIDDlg::RunStuffQuery(CString card_uid, CString& title, CString& img_path)
+{
+	string select_columns, table_name;
+
+	if (m_strCurrentDBName == m_db_name[mfc_book_management])
+	{
+		select_columns = "title, img_path";
+		table_name = "book";
+	}
+	else if (m_strCurrentDBName == m_db_name[mfc_record_management])
+	{
+		select_columns = "title, img_path";
+		table_name = "record";
+	}
+	else if (m_strCurrentDBName == m_db_name[mfc_wine_management])
+	{
+		select_columns = "name, img_path";
+		table_name = "wine";
+	}
+	else if (m_strCurrentDBName == m_db_name[mfc_employee_management])
+	{
+		select_columns = "name, img_path";
+		table_name = "employee";
+	}
+
+	string query;
+	query = string("SELECT ") + select_columns + string(" FROM ") + table_name
+		+ string(" WHERE card_uid = '") + string(CT2CA(card_uid)) + string("';");
+
+	mysql_query(&Connect, query.c_str());
+	sql_query_result = mysql_store_result(&Connect);
+
+	if (mysql_num_rows(sql_query_result) == 0)
+	{
+		printf("DB에 등록되지 않은 카드임!!!\n");
+		return FALSE;
+	}
+	else
+	{
+		sql_row = mysql_fetch_row(sql_query_result);
+		if (sql_row != nullptr)
+		{
+			title = sql_row[0];
+			img_path = sql_row[1];
+		}
+	}
+
+	mysql_free_result(sql_query_result);
+	return TRUE;
+}
+
+/*
+  desc: RFID로 읽은 card_uid를 조건으로 설정하여 DB에서 card_uid에 해당하는 name, authority와 img_path를 가져오는 쿼리를 실행한다.
+  param1: 쿼리 조건문에 사용될 card_uid 값
+  param2: SQL query로 DB에서 얻어온 값을 넣어줄 참조변수 name
+  param2: SQL query로 DB에서 얻어온 값을 넣어줄 참조변수 authority
+  param3: SQL query로 DB에서 얻어온 값을 넣어줄 참조변수 img_path
+  return: 쿼리 조회 결과 반환된 row가 0이라면 DB에 정보가 없는 것으로 판단하고 False리턴,
+		  쿼리 조회 결과 반횐된 row가 있으면 DB에 정보가 있는 것으로 판단하고 True리턴
+*/
+BOOL CRFIDDlg::RunUserQuery(CString card_uid, CString& name, CString& authority, CString& img_path)
+{
+	string query;
+	query = string("SELECT name, authority, img_path FROM user WHERE card_uid = '") + string(CT2CA(card_uid)) + string("';");
+
+	cout << query << endl;
+
+	mysql_query(&Connect, query.c_str());
+	sql_query_result = mysql_store_result(&Connect);
+
+	if (mysql_num_rows(sql_query_result) == 0)
+	{
+		printf("DB에 등록되지 않은 카드임!!!\n");
+		return FALSE;
+	}
+	else
+	{
+		sql_row = mysql_fetch_row(sql_query_result);
+		if (sql_row != nullptr)
+		{
+			name = sql_row[0];
+			authority = sql_row[1];
+			img_path = sql_row[2];
+		}
+	}
+
+	return TRUE;
+}
+
+/*
+  desc: RFID로 ISO14443A, ISO15693 규격의 카드와 통신하여 UID를 읽는다.
+  param: 읽는 카드의 ISO_type(ISO14443A 또는 ISO15693)
+  reuturn: 카드의 uid 값
+*/
+CString CRFIDDlg::ReadCardUID(uint8_t ISO_type)
+{
+	CString temp, card_uid = _T("");
+
+	if (ISO_type == ISO14443A)
+	{
+		// ISO14443A 읽기
+		if (is_WriteReadCommand(ftHandle, CM1_ISO14443AB, CM2_ISO14443A_ACTIVE + BUZZER_ON,
+			writeLength, wirteData, &readLength, readData) == IS_OK)
+		{
+			printf("ISO 14443AB UID : ");
+			for (uint16_t i = 0; i < readLength; i++)
+			{
+				printf("%02x ", readData[i]);
+				temp.Format(_T("%02x "), readData[i]);
+				card_uid += temp;
+			}
+			printf("\n");
+		}
+	}
+	else if (ISO_type == ISO15693)
+	{
+		// ISO15693 읽기
+		if (is_WriteReadCommand(ftHandle, CM1_ISO15693, CM2_ISO15693_ACTIVE + BUZZER_ON,
+			writeLength, wirteData, &readLength, readData) == IS_OK)
+		{
+			printf("ISO 15693 UID : ");
+			for (uint16_t i = 0; i < readLength; i++)
+			{
+				printf("%02x ", readData[i]);
+				temp.Format(_T("%02x "), readData[i]);
+				card_uid += temp;
+			}
+			printf("\n");
+		}
+	}
+
+	return card_uid;
+}
+
+/*
+  desc: 물건에 대응하는 ISO15693 타입의 카드를 읽어들이고, 
+        DB 조회에 성공하면 프로그램 GUI 요소들을 해당 DB값에 맞게 설정하여 출력한다.
+		만약 DB 조회에 실패하면 경고창을 띄우고 GUI 요소들을 건드리지 않고 바로 함수를 종료한다.
   param1:
   param2:
   return:
 */
-LRESULT CRFIDDlg::ReadCard(WPARAM wParam, LPARAM lParam)
+LRESULT CRFIDDlg::ReadStuffCard(WPARAM wParam, LPARAM lParam)
 {
 	CString card_uid, title, img_path;
 
 	// 카드 UID 읽기
-	card_uid = ReadCardUID();
+	card_uid = ReadCardUID(ISO15693);
 
 	if (past_card_uid != card_uid && card_uid != _T(""))
 	{
-		m_strRfid = card_uid;
+		m_strCardUID = card_uid;
 
-		// 카드 UID를 SQL의 WHERE조건으로 활용하여 쿼리를 날린 뒤, 
-		// 현 DB에서 카드 UID에 대응하는 title과 img_path 컬럼 값 받아오기
-		RunSQL(card_uid, title, img_path);
-		m_strStuffTitle = title;
-		PrintImage(img_path);
+		if (!RunStuffQuery(card_uid, title, img_path))
+		{
+			AfxMessageBox(_T("DB에 등록되지 않은 카드입니다."));
+			return 1; // 카드uid 조회 결과 DB에 없는 카드임이 밝혀져 바로 함수 종료.
+		}
+		m_strStuffName = title;
+		PrintImage(img_path, m_stuff_image, m_stuff_image_rect);
 
 		UpdateData(FALSE);
 
@@ -649,120 +938,66 @@ LRESULT CRFIDDlg::ReadCard(WPARAM wParam, LPARAM lParam)
 }
 
 /*
-  desc: RFID로 ISO15693, ISO14443A 규격의 카드와 통신하여 UID를 읽는다.
-  reuturn: 카드의 UID
+  desc: 사용자에 대응하는 ISO14443A 타입의 카드를 읽어들이고,
+		DB 조회에 성공하면 프로그램 GUI 요소들을 해당 DB값에 맞게 설정하여 출력한다.
+		만약 DB 조회에 실패하면 경고창을 띄우고 GUI 요소들을 건드리지 않고 바로 함수를 종료한다.
+  param1:
+  param2:
+  return:
 */
-CString CRFIDDlg::ReadCardUID()
+LRESULT CRFIDDlg::ReadUserCard(WPARAM wParam, LPARAM lParam)
 {
-	CString temp, card_uid = _T("");
+	CString card_uid, name, authority, img_path;
 
-	// ISO15693 읽기
-	if (is_WriteReadCommand(ftHandle, CM1_ISO15693, CM2_ISO15693_ACTIVE + BUZZER_ON,
-		writeLength, wirteData, &readLength, readData) == IS_OK)
+	// 카드 UID 읽기
+	card_uid = ReadCardUID(ISO14443A);
+
+	if (card_uid != _T(""))
 	{
-		printf("ISO 15693 UID : ");
-		for (uint16_t i = 0; i < readLength; i++)
+		if (!RunUserQuery(card_uid, name, authority, img_path))
 		{
-			printf("%02x ", readData[i]);
-			temp.Format(_T("%02x "), readData[i]);
-			card_uid += temp;
+			AfxMessageBox(_T("DB에 등록되지 않은 카드입니다."));
+			return 1; // 카드uid 조회 결과 DB에 없는 카드임이 밝혀져 바로 함수 종료.
 		}
-		printf("\n");
+		m_strUserName = name;
+		m_strUserAuthority = authority;
+		PrintImage(img_path, m_user_image, m_user_image_rect);
+
+		cout << string(CT2CA(img_path)) << endl;
+
+		if (authority == _T("1"))
+		{
+			m_flagAuthority = TRUE;
+			m_strUserAuthority = _T("관리자");
+			printf("접근 권한 open.\n");
+			SetDlgItemText(IDC_READ_ONCE, _T("1회 읽기")); // 임시 owner draw 호출용 메세지 생성
+			SetDlgItemText(IDC_READ_CONTINUE, _T("계속읽기")); // 임시 owner draw 호출용 메세지 생성
+		}
+		else
+		{
+			m_flagAuthority = FALSE;
+			m_strUserAuthority = _T("일반 사용자");
+			printf("접근 권한 close.\n");
+			SetDlgItemText(IDC_READ_ONCE, _T("1회 읽기")); // 임시 owner draw 호출용 메세지 생성
+			SetDlgItemText(IDC_READ_CONTINUE, _T("계속읽기")); // 임시 owner draw 호출용 메세지 생성
+		}
+
+		UpdateData(FALSE);
+
+		PlaySoundW(_T("sound\\DeviceConnect.wav"), NULL, SND_FILENAME | SND_ASYNC);
+		MessageBox(_T("사용자 인증에 성공했습니다."));
 	}
 
-	// ISO14443A 읽기
-	if (is_WriteReadCommand(ftHandle, CM1_ISO14443AB, CM2_ISO14443A_ACTIVE + BUZZER_ON,
-		writeLength, wirteData, &readLength, readData) == IS_OK)
-	{
-		printf("ISO 14443AB UID : ");
-		for (uint16_t i = 0; i < readLength; i++)
-		{
-			printf("%02x ", readData[i]);
-			temp.Format(_T("%02x "), readData[i]);
-			card_uid += temp;
-		}
-		printf("\n");
-	}
-
-	return card_uid;
+	return 0;
 }
 
 /*
-  desc: 소유자 그리기(Owner Draw) 옵션을 True로 준 컴포넌트에 한하여 컴포넌트 디자인 재설정
-        (재설정된 컴포넌트ID: IDC_RFID_CONNECTION, IDC_READ_CONTINUE, IDC_READ_ONCE)
+  desc: img_path를 바탕으로 이미지를 로드하여 Picture Control에 출력한다.
+  param: 이미지 경로
 */
-void CRFIDDlg::OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDrawItemStruct)
+void CRFIDDlg::PrintImage(CString img_path, CImage& image_instance, CRect& image_rect)
 {
-	if (nIDCtl == IDC_RFID_CONNECTION)
-	{
-		if (lpDrawItemStruct->itemAction & ODA_DRAWENTIRE || lpDrawItemStruct->itemAction & ODA_FOCUS || lpDrawItemStruct->itemAction & ODA_SELECT)
-		{
-			CDC* pDC = CDC::FromHandle(lpDrawItemStruct->hDC);
-
-			if (m_flagRFIDConnection)
-			{
-				pDC->FillSolidRect(&lpDrawItemStruct->rcItem, RGB(144, 238, 144)); // 연초록색
-				pDC->Draw3dRect(&lpDrawItemStruct->rcItem, RGB(128, 128, 128), RGB(125, 125, 125));
-			}
-			else
-			{
-				pDC->FillSolidRect(&lpDrawItemStruct->rcItem, RGB(225, 225, 225));
-				pDC->Draw3dRect(&lpDrawItemStruct->rcItem, RGB(128, 128, 128), RGB(125, 125, 125));
-			}
-			
-			pDC->SetTextColor(RGB(0, 0, 0));
-			pDC->SetBkMode(TRANSPARENT);
-			pDC->DrawText(_T("RFID 연결 toggle"), 14, &lpDrawItemStruct->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-		}
-	}
-	else if (nIDCtl == IDC_READ_CONTINUE)
-	{
-		if (lpDrawItemStruct->itemAction & ODA_DRAWENTIRE || lpDrawItemStruct->itemAction & ODA_FOCUS || lpDrawItemStruct->itemAction & ODA_SELECT)
-		{
-			CDC* pDC = CDC::FromHandle(lpDrawItemStruct->hDC);
-
-			pDC->SetTextColor(RGB(0, 0, 0));
-			pDC->SetBkMode(TRANSPARENT);
-
-			if (m_flagReadContinue)
-			{
-				pDC->FillSolidRect(&lpDrawItemStruct->rcItem, RGB(236, 230, 204)); // 아이보리색
-				pDC->Draw3dRect(&lpDrawItemStruct->rcItem, RGB(128, 128, 128), RGB(125, 125, 125));
-				pDC->DrawText(_T("계속읽기 진행중"), 8, &lpDrawItemStruct->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-			}
-			else
-			{
-				pDC->FillSolidRect(&lpDrawItemStruct->rcItem, RGB(225, 225, 225));
-				pDC->Draw3dRect(&lpDrawItemStruct->rcItem, RGB(128, 128, 128), RGB(125, 125, 125));
-				pDC->DrawText(_T("계속읽기"), 4, &lpDrawItemStruct->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-			}
-		}
-	}
-	else if (nIDCtl == IDC_READ_ONCE)
-	{
-		if (lpDrawItemStruct->itemAction & ODA_DRAWENTIRE || lpDrawItemStruct->itemAction & ODA_FOCUS || lpDrawItemStruct->itemAction & ODA_SELECT)
-		{
-			if (lpDrawItemStruct->itemAction & ODA_SELECT)
-			{
-				CDC* pDC = CDC::FromHandle(lpDrawItemStruct->hDC);
-
-				pDC->FillSolidRect(&lpDrawItemStruct->rcItem, RGB(236, 230, 204)); // 아이보리색
-				pDC->Draw3dRect(&lpDrawItemStruct->rcItem, RGB(128, 128, 128), RGB(125, 125, 125));
-				pDC->SetTextColor(RGB(0, 0, 0));
-				pDC->SetBkMode(TRANSPARENT);
-				pDC->DrawText(_T("1회 읽기"), 5, &lpDrawItemStruct->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-			}
-			else
-			{
-				CDC* pDC = CDC::FromHandle(lpDrawItemStruct->hDC);
-
-				pDC->FillSolidRect(&lpDrawItemStruct->rcItem, RGB(225, 225, 225));
-				pDC->Draw3dRect(&lpDrawItemStruct->rcItem, RGB(128, 128, 128), RGB(125, 125, 125));
-				pDC->SetTextColor(RGB(0, 0, 0));
-				pDC->SetBkMode(TRANSPARENT);
-				pDC->DrawText(_T("1회 읽기"), 5, &lpDrawItemStruct->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-			}
-		}
-	}
-	else CDialogEx::OnDrawItem(nIDCtl, lpDrawItemStruct);
+	image_instance.~CImage();
+	image_instance.Load(img_path);
+	InvalidateRect(image_rect, TRUE);
 }
