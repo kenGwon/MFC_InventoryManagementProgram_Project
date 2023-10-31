@@ -1,7 +1,6 @@
-﻿#include "is_d2xx.h"
+﻿#include "pch.h"
+#include "is_d2xx.h"
 
-
-#include <stdio.h>
 #include <windows.h>
 
 #define DLL_HANDLE           HINSTANCE

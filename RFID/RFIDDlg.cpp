@@ -1,6 +1,7 @@
 ﻿
 // RFIDDlg.cpp: 구현 파일
 //
+#include "pch.h"
 #include "RFIDDlg.h"
 
 //#define CONSOLE_DEBUG // 콘솔 디버깅이 필요하면 CONSOLE_DEBUG을 define하기
@@ -312,6 +313,53 @@ void CRFIDDlg::OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDrawItemStruct)
 				pDC->SetTextColor(RGB(185, 185, 185));
 				pDC->SetBkMode(TRANSPARENT);
 				pDC->DrawText(_T("1회 읽기"), 5, &lpDrawItemStruct->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+			}
+		}
+	}
+
+	if (nIDCtl == IDC_USER_UNAUTHORIZE)
+	{
+		if (m_flagUserAuthority)
+		{
+			GetDlgItem(IDC_USER_UNAUTHORIZE)->EnableWindow(TRUE);
+
+			if (lpDrawItemStruct->itemAction & ODA_DRAWENTIRE || lpDrawItemStruct->itemAction & ODA_FOCUS || lpDrawItemStruct->itemAction & ODA_SELECT)
+			{
+				if (lpDrawItemStruct->itemAction & ODA_FOCUS)
+				{
+					CDC* pDC = CDC::FromHandle(lpDrawItemStruct->hDC);
+
+					pDC->FillSolidRect(&lpDrawItemStruct->rcItem, RGB(236, 230, 204)); // 아이보리색
+					pDC->Draw3dRect(&lpDrawItemStruct->rcItem, RGB(128, 128, 128), RGB(125, 125, 125));
+					pDC->SetTextColor(RGB(0, 0, 0));
+					pDC->SetBkMode(TRANSPARENT);
+					pDC->DrawText(_T("관리자 인증 해제"), 9, &lpDrawItemStruct->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+				}
+				else
+				{
+					CDC* pDC = CDC::FromHandle(lpDrawItemStruct->hDC);
+
+					pDC->FillSolidRect(&lpDrawItemStruct->rcItem, RGB(225, 225, 225));
+					pDC->Draw3dRect(&lpDrawItemStruct->rcItem, RGB(128, 128, 128), RGB(125, 125, 125));
+					pDC->SetTextColor(RGB(0, 0, 0));
+					pDC->SetBkMode(TRANSPARENT);
+					pDC->DrawText(_T("관리자 인증 해제"), 9, &lpDrawItemStruct->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+				}
+			}
+		}
+		else
+		{
+			GetDlgItem(IDC_USER_UNAUTHORIZE)->EnableWindow(FALSE);
+
+			if (lpDrawItemStruct->itemAction & ODA_DRAWENTIRE || lpDrawItemStruct->itemAction & ODA_FOCUS || lpDrawItemStruct->itemAction & ODA_SELECT)
+			{
+				CDC* pDC = CDC::FromHandle(lpDrawItemStruct->hDC);
+
+				pDC->FillSolidRect(&lpDrawItemStruct->rcItem, RGB(255, 255, 255));
+				pDC->Draw3dRect(&lpDrawItemStruct->rcItem, RGB(185, 185, 185), RGB(185, 185, 185));
+				pDC->SetTextColor(RGB(185, 185, 185));
+				pDC->SetBkMode(TRANSPARENT);
+				pDC->DrawText(_T("관리자 인증 해제"), 9, &lpDrawItemStruct->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 			}
 		}
 	}

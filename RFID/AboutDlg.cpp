@@ -1,3 +1,4 @@
+#include "pch.h"
 #include "AboutDlg.h"
 
 CAboutDlg::CAboutDlg() : CDialogEx(IDD_ABOUTBOX)

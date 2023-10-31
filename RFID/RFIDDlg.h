@@ -3,7 +3,6 @@
 //
 #pragma once
 #include "afxdialogex.h"
-#include "pch.h"
 #include "is_d2xx.h"
 #include "RFID.h"
 #include "AboutDlg.h" // 프로그램 정보 다이얼로그
