@@ -21,9 +21,12 @@
 #define new DEBUG_NEW
 #endif
 
-#define CONNECT_IP "127.0.0.1"
-#define DB_USER "root"
-#define DB_PASSWORD "kgh951220"
+//#define CONNECT_IP "127.0.0.1"
+//#define DB_USER "root"
+//#define DB_PASSWORD "kgh951220"
+#define CONNECT_IP "10.10.15.70"
+#define DB_USER "ExternalUser"
+#define DB_PASSWORD "1042416"
 #define DB_PORT 3306
 
 #define ISO14443A 0
