@@ -7,6 +7,7 @@
 #include "pch.h"
 #include "is_d2xx.h"
 #include "RFID.h"
+#include <string>
 
 // sound 출력
 #pragma comment(lib,"winmm.lib")
@@ -21,11 +22,12 @@
 #include "AboutDlg.h"
 
 // 콘솔 디버깅
-#include <conio.h>
+//#include <conio.h>
 #include <stdio.h>
 #include <iostream>
 using namespace std;
 
+// 동적할당 메모리 누수 추적?
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
@@ -37,12 +39,8 @@ using namespace std;
 
 #define MESSAGE_READ_CARD WM_USER + 1 // 사용자 정의 메세지
 
-
-enum ISO_Type
-{
-	ISO14443A = 0,
-	ISO15693
-};
+#define ISO14443A 0
+#define ISO15693 1
 
 enum DB_Name
 {

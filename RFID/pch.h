@@ -9,11 +9,5 @@
 
 // 여기에 미리 컴파일하려는 헤더 추가
 //#include "framework.h"
-#include <string>
-
-// 빌드하여 실행했을 때, 콘솔도 함께 뜨도록 만들기 위한 명령
-#pragma comment(linker, "/ENTRY:WinMainCRTStartup /subsystem:console")
-
-
 
 #endif //PCH_H

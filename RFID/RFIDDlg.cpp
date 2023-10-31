@@ -3,6 +3,12 @@
 //
 #include "RFIDDlg.h"
 
+//#define CONSOLE_DEBUG // 콘솔 디버깅이 필요하면 CONSOLE_DEBUG을 define하기
+
+#ifdef CONSOLE_DEBUG
+#pragma comment(linker, "/ENTRY:WinMainCRTStartup /subsystem:console") // 빌드하여 실행했을 때, 콘솔도 함께 뜨도록 만들기 위한 명령
+#endif
+
 // DB 연결용 static 전역변수
 static MYSQL Connect;
 static MYSQL_RES* sql_query_result;
@@ -73,8 +79,10 @@ CRFIDDlg::CRFIDDlg(CWnd* pParent /*=nullptr*/)
 	m_pThread = nullptr;
 
 	/* 아래 멤버변수는 OnInitDialog()에서 초기화
-	m_image_rect
-	m_image
+	m_stuff_image_rect;
+	m_user_image_rect;
+	m_stuff_image;
+	m_user_image;
 	m_ctrlDBcomboBox
 	*/
 }
@@ -349,7 +357,7 @@ void CRFIDDlg::OnPaint()
 		CDialogEx::OnPaint();
 
 		dc.SetStretchBltMode(COLORONCOLOR); // 이미지를 축소나 확대를 경우 생기는 손실을 보정
-		
+
 		if (!m_stuff_image.IsNull())
 		{
 			m_stuff_image.Draw(dc, m_stuff_image_rect); // 그림을 Picture Control 크기로 화면에 출력한다.	
@@ -450,6 +458,7 @@ void CRFIDDlg::OnCbnSelchangeDbSelectCombo()
 		m_strStuffName = _T("");
 		m_strUserName = _T("");
 		m_strUserAuthority = _T("");
+		UpdateData(FALSE);
 
 		// Print Control에 IDLE 상태의 로고 이미지를 출력한다.
 		GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(70, 125, 345, 195);
@@ -466,6 +475,7 @@ void CRFIDDlg::OnCbnSelchangeDbSelectCombo()
 		SetDlgItemText(IDC_EDIT1, _T("여기에 카드UID 출력"));
 		SetDlgItemText(IDC_EDIT2, _T("여기에 물품이름 출력"));
 
+		PlaySoundW(_T("sound\\ChangeAlert.wav"), NULL, SND_FILENAME | SND_ASYNC);
 		return; // 함수 리턴.
 	}
 	else if (CBox_select == _T("도서관리"))
@@ -489,7 +499,6 @@ void CRFIDDlg::OnCbnSelchangeDbSelectCombo()
 	else
 	{
 		AfxMessageBox(_T("error occured in ComboBox!!!"));
-		printf("error occured in ComboBox!!!\n");
 		return;
 	}
 
@@ -628,7 +637,7 @@ void CRFIDDlg::OnBnClickedUserUnauthorize()
 		WaitForSingleObject(m_pThread->m_hThread, 5000);
 		SetDlgItemText(IDC_READ_CONTINUE, _T("계속읽기"));
 	}
-	
+
 	if (m_flagAuthority)
 	{
 		m_flagAuthority = FALSE;
@@ -668,19 +677,27 @@ BOOL CRFIDDlg::OnConnect()
 	//열린 포트번호 찾기
 	if (is_GetDeviceNumber(&usbnumber) == IS_OK)
 	{
+#ifdef CONSOLE_DEBUG
 		printf("FTDI USB To Serial 연결된 개수 : %d\n", usbnumber);
+#endif
 		if (is_GetSerialNumber(0, readSerialNumber) == IS_OK)
 		{
 			if (memcmp(changeSerialNumber, readSerialNumber, sizeof(changeSerialNumber) != 0))
 			{
 				if (is_SetSerialNumber(0, changeSerialNumber) == IS_OK)
 				{
+#ifdef CONSOLE_DEBUG 
 					printf(" USB To Serial Number 를 변경 하였습니다.\n");
 					printf(" FTDI SerialNumber :  %s \n", changeSerialNumber);
+#endif
 				}
 			}
 			else
+			{
+#ifdef CONSOLE_DEBUG 
 				printf(" FTDI SerialNumber :  %s \n", changeSerialNumber);
+#endif
+			}
 		}
 	}
 
@@ -688,20 +705,24 @@ BOOL CRFIDDlg::OnConnect()
 	unsigned long portNumber;
 	if (is_GetCOMPort_NoConnect(0, &portNumber) == IS_OK)
 	{
+#ifdef CONSOLE_DEBUG 
 		printf("COM Port : %d\n", portNumber);
+#endif
 	}
 
 	if (is_OpenSerialNumber(&ftHandle, readSerialNumber, 115200) != IS_OK)
 	{
+#ifdef CONSOLE_DEBUG 
 		printf("USB To Serial과 통신 연결 실패\n");
+#endif
 		Sleep(100);
-
 		return FALSE;
 	}
 	else {
+#ifdef CONSOLE_DEBUG 
 		printf("Serial포트 %d와 통신 연결성공!! \n", portNumber);
+#endif
 		Sleep(100);
-
 		return TRUE;
 	}
 }
@@ -718,11 +739,16 @@ BOOL CRFIDDlg::OnDisconnect()
 	//USB 포트를 Close
 	if (is_Close(ftHandle) == IS_OK)
 	{
+#ifdef CONSOLE_DEBUG 
 		printf("연결을 닫습니다. ");
+#endif
 		return TRUE;
 	}
 	else
 	{
+#ifdef CONSOLE_DEBUG 
+		printf("연결 닫기 실패. ");
+#endif
 		return FALSE;
 	}
 }
@@ -738,12 +764,16 @@ void CRFIDDlg::AttachDB(string& DBName)
 
 	if (mysql_real_connect(&Connect, CONNECT_IP, DB_USER, DB_PASSWORD, DBName.c_str(), DB_PORT, NULL, 0))
 	{
+#ifdef CONSOLE_DEBUG 
 		printf("%s DB 연결성공!!!\n", DBName.c_str());
+#endif
 	}
 	else
 	{
 		AfxMessageBox(_T("DB연결에 실패했습니다.\nDB서버 개방여부 확인하십시오."));
+#ifdef CONSOLE_DEBUG 
 		printf("%s DB 연결실패...\n", DBName.c_str());
+#endif
 	}
 
 	mysql_query(&Connect, "SET Names euckr"); // DB 문자 인코딩을 euckr로 셋팅
@@ -756,8 +786,10 @@ void CRFIDDlg::AttachDB(string& DBName)
 void CRFIDDlg::DetachDB(string& DBName)
 {
 	m_flagDBConnection = FALSE;
-	printf("%s DB 연결해제...\n", DBName.c_str());
 	mysql_close(&Connect);
+#ifdef CONSOLE_DEBUG 
+	printf("%s DB 연결해제...\n", DBName.c_str()); 
+#endif
 }
 
 /*
@@ -765,8 +797,8 @@ void CRFIDDlg::DetachDB(string& DBName)
   param1: 쿼리 조건문에 사용될 card_uid 값
   param2: SQL query로 DB에서 얻어온 값을 넣어줄 참조변수 title
   param3: SQL query로 DB에서 얻어온 값을 넣어줄 참조변수 img_path
-  return: 쿼리 조회 결과 반환된 row가 0이라면 DB에 정보가 없는 것으로 판단하고 False리턴, 
-          쿼리 조회 결과 반횐된 row가 있으면 DB에 정보가 있는 것으로 판단하고 True리턴
+  return: 쿼리 조회 결과 반환된 row가 0이라면 DB에 정보가 없는 것으로 판단하고 False리턴,
+		  쿼리 조회 결과 반횐된 row가 있으면 DB에 정보가 있는 것으로 판단하고 True리턴
 */
 BOOL CRFIDDlg::RunStuffQuery(CString card_uid, CString& title, CString& img_path)
 {
@@ -797,12 +829,15 @@ BOOL CRFIDDlg::RunStuffQuery(CString card_uid, CString& title, CString& img_path
 	query = string("SELECT ") + select_columns + string(" FROM ") + table_name
 		+ string(" WHERE card_uid = '") + string(CT2CA(card_uid)) + string("';");
 
+#ifdef CONSOLE_DEBUG 
+	cout << query << endl; 
+#endif
+
 	mysql_query(&Connect, query.c_str());
 	sql_query_result = mysql_store_result(&Connect);
 
 	if (mysql_num_rows(sql_query_result) == 0)
 	{
-		printf("DB에 등록되지 않은 카드임!!!\n");
 		return FALSE;
 	}
 	else
@@ -833,14 +868,15 @@ BOOL CRFIDDlg::RunUserQuery(CString card_uid, CString& name, CString& authority,
 	string query;
 	query = string("SELECT name, authority, img_path FROM user WHERE card_uid = '") + string(CT2CA(card_uid)) + string("';");
 
+#ifdef CONSOLE_DEBUG 
 	cout << query << endl;
+#endif
 
 	mysql_query(&Connect, query.c_str());
 	sql_query_result = mysql_store_result(&Connect);
 
 	if (mysql_num_rows(sql_query_result) == 0)
 	{
-		printf("DB에 등록되지 않은 카드임!!!\n");
 		return FALSE;
 	}
 	else
@@ -872,14 +908,20 @@ CString CRFIDDlg::ReadCardUID(uint8_t ISO_type)
 		if (is_WriteReadCommand(ftHandle, CM1_ISO14443AB, CM2_ISO14443A_ACTIVE + BUZZER_ON,
 			writeLength, wirteData, &readLength, readData) == IS_OK)
 		{
+#ifdef CONSOLE_DEBUG 
 			printf("ISO 14443AB UID : ");
+#endif
 			for (uint16_t i = 0; i < readLength; i++)
 			{
-				printf("%02x ", readData[i]);
 				temp.Format(_T("%02x "), readData[i]);
 				card_uid += temp;
+#ifdef CONSOLE_DEBUG 
+				printf("%02x ", readData[i]);
+#endif
 			}
+#ifdef CONSOLE_DEBUG 
 			printf("\n");
+#endif
 		}
 	}
 	else if (ISO_type == ISO15693)
@@ -888,14 +930,20 @@ CString CRFIDDlg::ReadCardUID(uint8_t ISO_type)
 		if (is_WriteReadCommand(ftHandle, CM1_ISO15693, CM2_ISO15693_ACTIVE + BUZZER_ON,
 			writeLength, wirteData, &readLength, readData) == IS_OK)
 		{
+#ifdef CONSOLE_DEBUG 
 			printf("ISO 15693 UID : ");
+#endif
 			for (uint16_t i = 0; i < readLength; i++)
 			{
-				printf("%02x ", readData[i]);
 				temp.Format(_T("%02x "), readData[i]);
 				card_uid += temp;
+#ifdef CONSOLE_DEBUG 
+				printf("%02x ", readData[i]);
+#endif
 			}
+#ifdef CONSOLE_DEBUG 
 			printf("\n");
+#endif
 		}
 	}
 
@@ -903,8 +951,8 @@ CString CRFIDDlg::ReadCardUID(uint8_t ISO_type)
 }
 
 /*
-  desc: 물건에 대응하는 ISO15693 타입의 카드를 읽어들이고, 
-        DB 조회에 성공하면 프로그램 GUI 요소들을 해당 DB값에 맞게 설정하여 출력한다.
+  desc: 물건에 대응하는 ISO15693 타입의 카드를 읽어들이고,
+		DB 조회에 성공하면 프로그램 GUI 요소들을 해당 DB값에 맞게 설정하여 출력한다.
 		만약 DB 조회에 실패하면 경고창을 띄우고 GUI 요소들을 건드리지 않고 바로 함수를 종료한다.
   param1:
   param2:
@@ -963,23 +1011,25 @@ LRESULT CRFIDDlg::ReadUserCard(WPARAM wParam, LPARAM lParam)
 		m_strUserAuthority = authority;
 		PrintImage(img_path, m_user_image, m_user_image_rect);
 
-		cout << string(CT2CA(img_path)) << endl;
-
 		if (authority == _T("1"))
 		{
 			m_flagAuthority = TRUE;
 			m_strUserAuthority = _T("관리자");
-			printf("접근 권한 open.\n");
 			SetDlgItemText(IDC_READ_ONCE, _T("1회 읽기")); // 임시 owner draw 호출용 메세지 생성
 			SetDlgItemText(IDC_READ_CONTINUE, _T("계속읽기")); // 임시 owner draw 호출용 메세지 생성
+#ifdef CONSOLE_DEBUG 
+			printf("접근 권한 open.\n");
+#endif
 		}
 		else
 		{
 			m_flagAuthority = FALSE;
 			m_strUserAuthority = _T("일반 사용자");
-			printf("접근 권한 close.\n");
 			SetDlgItemText(IDC_READ_ONCE, _T("1회 읽기")); // 임시 owner draw 호출용 메세지 생성
 			SetDlgItemText(IDC_READ_CONTINUE, _T("계속읽기")); // 임시 owner draw 호출용 메세지 생성
+#ifdef CONSOLE_DEBUG 
+			printf("접근 권한 close.\n");
+#endif
 		}
 
 		UpdateData(FALSE);
