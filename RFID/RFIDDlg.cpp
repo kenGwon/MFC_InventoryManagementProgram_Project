@@ -9,16 +9,10 @@
 #pragma comment(linker, "/ENTRY:WinMainCRTStartup /subsystem:console") // 빌드하여 실행했을 때, 콘솔도 함께 뜨도록 만들기 위한 명령
 #endif
 
-// DB 연결용 static 전역변수
-static MYSQL Connect;
-static MYSQL_RES* sql_query_result;
-static MYSQL_ROW sql_row;
-static CString past_card_uid;
-
-/* <static 전역 함수>
+/* <global scope function... non- CRFIDDlg class context>
   desc: "계속읽기" 모드를 담당할 작업스레드. 1초마다 한번씩 "1회 읽기" 메세지를 생성한다.
 */
-static UINT ThreadForReading(LPVOID param)
+UINT ThreadForReading(LPVOID param)
 {
 	CRFIDDlg* pMain = (CRFIDDlg*)param;
 
@@ -30,6 +24,7 @@ static UINT ThreadForReading(LPVOID param)
 
 	return 0;
 }
+
 
 // CRFIDDlg 대화 상자 
 
@@ -57,10 +52,6 @@ END_MESSAGE_MAP()
 */
 CRFIDDlg::CRFIDDlg(CWnd* pParent /*=nullptr*/)
 	: CDialogEx(IDD_RFID_DIALOG, pParent)
-	, m_strCardUID(_T(""))
-	, m_strStuffName(_T(""))
-	, m_strUserName(_T(""))
-	, m_strUserAuthority(_T(""))
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_kenGwon);
 
@@ -72,18 +63,20 @@ CRFIDDlg::CRFIDDlg(CWnd* pParent /*=nullptr*/)
 	m_flagReadCardWorkingThread = FALSE;
 
 	// 변수 초기화
-	past_card_uid = _T(""); // static 전역변수
-	m_strCurrentDBName = "";
 	m_strCardUID = _T("");
 	m_strStuffName = _T("");
-	m_pThread = nullptr;
+	m_strUserName = _T("");
+	m_strUserAuthority = _T("");
+	
+	m_strCurrentDBName = "";
+	past_card_uid = _T("");
 
 	/* 아래 멤버변수는 OnInitDialog()에서 초기화
+	m_ctrlDBcomboBox
 	m_stuff_image_rect;
 	m_user_image_rect;
 	m_stuff_image;
 	m_user_image;
-	m_ctrlDBcomboBox
 	*/
 }
 
@@ -104,9 +97,9 @@ void CRFIDDlg::DoDataExchange(CDataExchange* pDX)
 	CDialogEx::DoDataExchange(pDX);
 	DDX_Text(pDX, IDC_EDIT1, m_strCardUID);
 	DDX_Text(pDX, IDC_EDIT2, m_strStuffName);
-	DDX_Control(pDX, IDC_DB_SELECT_COMBO, m_ctrlDBcomboBox);
 	DDX_Text(pDX, IDC_EDIT3, m_strUserName);
 	DDX_Text(pDX, IDC_EDIT4, m_strUserAuthority);
+	DDX_Control(pDX, IDC_DB_SELECT_COMBO, m_ctrlDBcomboBox);
 }
 
 /*
@@ -480,19 +473,19 @@ void CRFIDDlg::OnCbnSelchangeDbSelectCombo()
 	}
 	else if (CBox_select == _T("도서관리"))
 	{
-		m_strCurrentDBName = m_db_name[mfc_book_management];
+		m_strCurrentDBName = m_db_list[mfc_book_management];
 		GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(120, 70, 240, 320);
 		SetDlgItemText(IDC_TITLE_NAME, _T("Title:"));
 	}
 	else if (CBox_select == _T("음반관리"))
 	{
-		m_strCurrentDBName = m_db_name[mfc_record_management];
+		m_strCurrentDBName = m_db_list[mfc_record_management];
 		GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(100, 80, 300, 300);
 		SetDlgItemText(IDC_TITLE_NAME, _T("Title:"));
 	}
 	else if (CBox_select == _T("와인관리"))
 	{
-		m_strCurrentDBName = m_db_name[mfc_wine_management];
+		m_strCurrentDBName = m_db_list[mfc_wine_management];
 		GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(150, 70, 180, 320);
 		SetDlgItemText(IDC_TITLE_NAME, _T("Name:"));
 	}
@@ -804,25 +797,20 @@ BOOL CRFIDDlg::RunStuffQuery(CString card_uid, CString& title, CString& img_path
 {
 	string select_columns, table_name;
 
-	if (m_strCurrentDBName == m_db_name[mfc_book_management])
+	if (m_strCurrentDBName == m_db_list[mfc_book_management])
 	{
 		select_columns = "title, img_path";
 		table_name = "book";
 	}
-	else if (m_strCurrentDBName == m_db_name[mfc_record_management])
+	else if (m_strCurrentDBName == m_db_list[mfc_record_management])
 	{
 		select_columns = "title, img_path";
 		table_name = "record";
 	}
-	else if (m_strCurrentDBName == m_db_name[mfc_wine_management])
+	else if (m_strCurrentDBName == m_db_list[mfc_wine_management])
 	{
 		select_columns = "name, img_path";
 		table_name = "wine";
-	}
-	else if (m_strCurrentDBName == m_db_name[mfc_employee_management])
-	{
-		select_columns = "name, img_path";
-		table_name = "employee";
 	}
 
 	string query;

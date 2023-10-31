@@ -2,12 +2,13 @@
 // RFIDDlg.h: 헤더 파일
 //
 #pragma once
+using namespace std;
 #include "afxdialogex.h"
 #include "framework.h"
 #include "pch.h"
 #include "is_d2xx.h"
 #include "RFID.h"
-#include <string>
+#include "AboutDlg.h" // 프로그램 정보 다이얼로그
 
 // sound 출력
 #pragma comment(lib,"winmm.lib")
@@ -17,15 +18,6 @@
 // DB 연결
 #pragma comment(lib, "libmariadb.lib")
 #include "mysql/mysql.h"
-
-// 프로그램 정보 다이얼로그
-#include "AboutDlg.h"
-
-// 콘솔 디버깅
-//#include <conio.h>
-#include <stdio.h>
-#include <iostream>
-using namespace std;
 
 // 동적할당 메모리 누수 추적?
 #ifdef _DEBUG
@@ -37,19 +29,10 @@ using namespace std;
 #define DB_PASSWORD "kgh951220"
 #define DB_PORT 3306
 
-#define MESSAGE_READ_CARD WM_USER + 1 // 사용자 정의 메세지
-
 #define ISO14443A 0
 #define ISO15693 1
 
-enum DB_Name
-{
-	mfc_book_management = 0,
-	mfc_record_management,
-	mfc_wine_management,
-	mfc_employee_management,
-	mfc_test
-};
+#define MESSAGE_READ_CARD WM_USER + 1 // 사용자 정의 메세지
 
 // CRFIDDlg 대화 상자
 class CRFIDDlg : public CDialogEx
@@ -64,30 +47,42 @@ private:
 	unsigned char readData[1024];
 	unsigned short readLength = 0;
 
-	CComboBox m_ctrlDBcomboBox;
-	CWinThread* m_pThread;
-
 	BOOL m_flagReadCardWorkingThread;
 	BOOL m_flagAuthority;
 	BOOL m_flagRFIDConnection;
 	BOOL m_flagDBConnection;
 	BOOL m_flagReadContinue;
 
-	string m_db_name[10] = { "mfc_book_management", "mfc_record_management", "mfc_wine_management", "mfc_employee_management", "mfc_test" };
-	string m_strCurrentDBName;
 	CString m_strCardUID;
 	CString m_strStuffName;
 	CString m_strUserName;
 	CString m_strUserAuthority;
 
-	CRect m_stuff_image_rect;  // Picture Control의 위치를 기억할 변수
+	CRect m_stuff_image_rect;
 	CRect m_user_image_rect;
-	CImage m_stuff_image;  // 사용자가 선택한 이미지 객체를 구성할 변수
+	CImage m_stuff_image;
 	CImage m_user_image;
 
+	CComboBox m_ctrlDBcomboBox;
+	CWinThread* m_pThread;
+
 protected:
+	enum DB_Name
+	{
+		mfc_book_management = 0,
+		mfc_record_management,
+		mfc_wine_management
+	};
 	DECLARE_MESSAGE_MAP()
 	HICON m_hIcon;
+
+	vector<string> m_db_list = { "mfc_book_management", "mfc_record_management", "mfc_wine_management" };
+	string m_strCurrentDBName;
+	CString past_card_uid;
+
+	MYSQL Connect;
+	MYSQL_RES* sql_query_result;
+	MYSQL_ROW sql_row;
 
 	virtual void DoDataExchange(CDataExchange* pDX);
 	virtual BOOL OnInitDialog();
