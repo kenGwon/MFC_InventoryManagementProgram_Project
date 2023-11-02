@@ -239,7 +239,7 @@ BOOL CRFIDDlg::OnInitDialog()
 	// 물건을 보여주는 Picture Control에 IDLE 상태의 로고 이미지를 출력한다.
 	if (m_flagWindows11)
 	{
-		GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(110, 145, 345, 195);
+		GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(110, 165, 345, 195);
 	}
 	else
 	{
@@ -598,7 +598,7 @@ void CRFIDDlg::OnCbnSelchangeDbSelectCombo()
 		// Print Control에 IDLE 상태의 로고 이미지를 출력한다.
 		if (m_flagWindows11)
 		{
-			GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(110, 145, 345, 195);
+			GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(110, 165, 345, 195);
 		}
 		else
 		{
@@ -627,7 +627,7 @@ void CRFIDDlg::OnCbnSelchangeDbSelectCombo()
 		m_strCurrentDBName = m_db_list[mfc_book_management];
 		if (m_flagWindows11)
 		{
-			GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(160, 90, 240, 320);
+			GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(160, 110, 240, 320);
 		}
 		else
 		{
@@ -640,11 +640,11 @@ void CRFIDDlg::OnCbnSelchangeDbSelectCombo()
 		m_strCurrentDBName = m_db_list[mfc_record_management];
 		if (m_flagWindows11)
 		{
-			GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(160, 90, 240, 320);
+			GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(140, 120, 300, 300);
 		}
 		else
 		{
-			GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(120, 70, 240, 320);
+			GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(100, 80, 300, 300);
 		}
 		SetDlgItemText(IDC_TITLE_NAME, _T("Title:"));
 	}
@@ -653,11 +653,11 @@ void CRFIDDlg::OnCbnSelchangeDbSelectCombo()
 		m_strCurrentDBName = m_db_list[mfc_wine_management];
 		if (m_flagWindows11)
 		{
-			GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(160, 90, 240, 320);
+			GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(190, 110, 180, 320);
 		}
 		else
 		{
-			GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(120, 70, 240, 320);
+			GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(150, 70, 180, 320);
 		}
 		SetDlgItemText(IDC_TITLE_NAME, _T("Name:"));
 	}
