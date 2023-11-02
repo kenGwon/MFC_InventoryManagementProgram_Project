@@ -16,6 +16,8 @@
 #pragma comment(lib, "libmariadb.lib")
 #include "mysql/mysql.h"
 
+using namespace std;
+
 // 동적할당 메모리 누수 추적?
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -34,7 +36,14 @@
 
 #define MESSAGE_READ_CARD WM_USER + 1 // 사용자 정의 메세지
 
-using namespace std;
+// MFC 어플리케이션의 이미지 박스가 
+// 윈도우 10 환경과 윈도우 11환경에서 다른 위치에서 출력되는 문제를 
+// 해결하기 위한 함수 Is_Win11_or_Later()를 위한 사전 typedef 작업
+typedef void (WINAPI* RtlGetVersion_FUNC) (OSVERSIONINFOEXW*);
+
+// 전역함수 선언
+BOOL Is_Win11_or_Later();
+UINT ThreadForReading(LPVOID param);
 
 // CRFIDDlg 대화 상자
 class CRFIDDlg : public CDialogEx
@@ -54,6 +63,7 @@ private:
 	BOOL m_flagRFIDConnection;
 	BOOL m_flagDBConnection;
 	BOOL m_flagReadContinue;
+	BOOL m_flagWindows11;
 
 	CString m_strCardUID;
 	CString m_strStuffName;

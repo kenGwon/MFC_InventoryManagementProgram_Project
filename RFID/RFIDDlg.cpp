@@ -11,6 +11,97 @@
 #endif
 
 /* <global scope function... non- CRFIDDlg class context>
+  desc: MFC 애플리케이션이 돌아가고 있는 OS가 윈도우11 이상인지 아닌지 확인한다.
+        이 함수가 필요한 이유는 윈도우10 환경과 윈도우11 환경에서 MFC 애플리케이션이 완벽 호환 되지 않아 
+		몇몇 GUI 컴포넌트들의 크기와 좌표값이 의도한 바와 다르게 출력되기 때문이다.
+  return: 윈도우11 이상이면 True를 리턴하고, 윈도우11 미만이면 False를 리턴한다.
+*/
+BOOL Is_Win11_or_Later()
+{
+	DWORD dwMajor = 0;
+	DWORD dwMinor = 0;
+	DWORD dwBuildNumber = 0;
+
+	HMODULE hMod;
+	RtlGetVersion_FUNC func;
+
+	hMod = LoadLibrary(TEXT("ntdll.dll"));
+
+	if (hMod)
+	{
+		func = (RtlGetVersion_FUNC)GetProcAddress(hMod, "RtlGetVersion");
+
+		if (func == 0)
+		{
+		}
+		else
+		{
+			OSVERSIONINFOEX Info;
+
+			ZeroMemory(&Info, sizeof(OSVERSIONINFOEX));
+
+			Info.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEX);
+
+			func(&Info);
+
+			dwMajor = Info.dwMajorVersion;
+			dwMinor = Info.dwMinorVersion;
+			dwBuildNumber = Info.dwBuildNumber;
+		}
+
+		FreeLibrary(hMod);
+	}
+
+	// dwMajor가 10 이고 빌드번호가 22000 이상이면 윈도우 11 이다
+	if (10 == dwMajor && 22000 <= dwBuildNumber)
+	{
+#ifdef CONSOLE_DEBUG
+		printf("윈도우 11입니다!!!");
+#endif
+		return TRUE;
+	}
+	else
+	{
+#ifdef CONSOLE_DEBUG
+		printf("윈도우 10입니다...");
+#endif
+		return FALSE;
+	}
+}
+
+/*
+  desc: 아래 함수는 마이크로소프트사에서 권장하는 메뉴얼 샘플 코드를 변형한 것인데 의도한대로 작동하지 않아 폐기함...
+        https://learn.microsoft.com/ko-kr/windows/win32/sysinfo/verifying-the-system-version
+*/
+#if 0
+BOOL Is_Win11_or_Later()
+{
+    OSVERSIONINFOEX osvi;
+    DWORDLONG dwlConditionMask = 0;
+    int op = VER_GREATER_EQUAL;
+
+    // Initialize the OSVERSIONINFOEX structure.
+
+    ZeroMemory(&osvi, sizeof(OSVERSIONINFOEX));
+    osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEX);
+    osvi.dwMajorVersion = 10;
+    osvi.dwBuildNumber = 22000;
+
+    // Initialize the condition mask.
+
+    VER_SET_CONDITION(dwlConditionMask, VER_MAJORVERSION, op);
+    VER_SET_CONDITION(dwlConditionMask, VER_BUILDNUMBER, op);
+
+    // Perform the test.
+
+    return VerifyVersionInfo(
+        &osvi,
+        VER_MAJORVERSION | VER_BUILDNUMBER,
+        dwlConditionMask);
+}
+#endif
+
+/* <global scope function... non- CRFIDDlg class context>
   desc: "계속읽기" 모드를 담당할 작업스레드. 1초마다 한번씩 "1회 읽기" 메세지를 생성한다.
 */
 UINT ThreadForReading(LPVOID param)
@@ -62,6 +153,7 @@ CRFIDDlg::CRFIDDlg(CWnd* pParent /*=nullptr*/)
 	m_flagDBConnection = FALSE;
 	m_flagRFIDConnection = FALSE;
 	m_flagReadCardWorkingThread = FALSE;
+	m_flagWindows11 = Is_Win11_or_Later();
 
 	// 변수 초기화
 	m_strCardUID = _T("");
@@ -145,10 +237,17 @@ BOOL CRFIDDlg::OnInitDialog()
 	m_ctrlDBcomboBox.AddString(_T("와인관리"));
 
 	// 물건을 보여주는 Picture Control에 IDLE 상태의 로고 이미지를 출력한다.
-	GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(70, 125, 345, 195);
+	if (m_flagWindows11)
+	{
+		GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(110, 145, 345, 195);
+	}
+	else
+	{
+		GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(70, 125, 345, 195);
+	}
 	GetDlgItem(IDC_STUFF_PICTURE)->GetWindowRect(m_stuff_image_rect);
 	ScreenToClient(m_stuff_image_rect);
-	PrintImage(_T("img\\IDE_logo.bmp"), m_stuff_image, m_stuff_image_rect);
+	PrintImage(_T("img\\IDLE_logo.bmp"), m_stuff_image, m_stuff_image_rect);
 
 	// Edit Control에 안내 메세지를 적는다.
 	SetDlgItemText(IDC_EDIT1, _T("여기에 카드UID 출력"));
@@ -168,7 +267,7 @@ BOOL CRFIDDlg::OnInitDialog()
 	// 관리자를 보여주는 Picture Control에 이미지를 출력한다.
 	GetDlgItem(IDC_USER_PICTURE)->GetWindowRect(m_user_image_rect);
 	ScreenToClient(m_user_image_rect);
-	PrintImage(_T("img\\IDE_user.bmp"), m_user_image, m_user_image_rect);
+	PrintImage(_T("img\\IDLE_user.bmp"), m_user_image, m_user_image_rect);
 
 	return TRUE;  // 포커스를 컨트롤에 설정하지 않으면 TRUE를 반환합니다.
 }
@@ -497,14 +596,21 @@ void CRFIDDlg::OnCbnSelchangeDbSelectCombo()
 		m_strUserAuthority = _T("");
 
 		// Print Control에 IDLE 상태의 로고 이미지를 출력한다.
-		GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(70, 125, 345, 195);
+		if (m_flagWindows11)
+		{
+			GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(110, 145, 345, 195);
+		}
+		else
+		{
+			GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(70, 125, 345, 195);
+		}
 		GetDlgItem(IDC_STUFF_PICTURE)->GetWindowRect(m_stuff_image_rect);
 		ScreenToClient(m_stuff_image_rect);
-		PrintImage(_T("img\\IDE_logo.bmp"), m_stuff_image, m_stuff_image_rect);
+		PrintImage(_T("img\\IDLE_logo.bmp"), m_stuff_image, m_stuff_image_rect);
 
 		GetDlgItem(IDC_USER_PICTURE)->GetWindowRect(m_user_image_rect);
 		ScreenToClient(m_user_image_rect);
-		PrintImage(_T("img\\IDE_user.bmp"), m_user_image, m_user_image_rect);
+		PrintImage(_T("img\\IDLE_user.bmp"), m_user_image, m_user_image_rect);
 
 		// Edit Control에 안내 메세지를 적는다.
 		SetDlgItemText(IDC_EDIT1, _T("여기에 카드UID 출력"));
@@ -519,19 +625,40 @@ void CRFIDDlg::OnCbnSelchangeDbSelectCombo()
 	else if (CBox_select == _T("도서관리"))
 	{
 		m_strCurrentDBName = m_db_list[mfc_book_management];
-		GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(120, 70, 240, 320);
+		if (m_flagWindows11)
+		{
+			GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(160, 90, 240, 320);
+		}
+		else
+		{
+			GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(120, 70, 240, 320);
+		}
 		SetDlgItemText(IDC_TITLE_NAME, _T("Title:"));
 	}
 	else if (CBox_select == _T("음반관리"))
 	{
 		m_strCurrentDBName = m_db_list[mfc_record_management];
-		GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(100, 80, 300, 300);
+		if (m_flagWindows11)
+		{
+			GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(160, 90, 240, 320);
+		}
+		else
+		{
+			GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(120, 70, 240, 320);
+		}
 		SetDlgItemText(IDC_TITLE_NAME, _T("Title:"));
 	}
 	else if (CBox_select == _T("와인관리"))
 	{
 		m_strCurrentDBName = m_db_list[mfc_wine_management];
-		GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(150, 70, 180, 320);
+		if (m_flagWindows11)
+		{
+			GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(160, 90, 240, 320);
+		}
+		else
+		{
+			GetDlgItem(IDC_STUFF_PICTURE)->MoveWindow(120, 70, 240, 320);
+		}
 		SetDlgItemText(IDC_TITLE_NAME, _T("Name:"));
 	}
 	else
@@ -688,7 +815,7 @@ void CRFIDDlg::OnBnClickedUserUnauthorize()
 
 		GetDlgItem(IDC_USER_PICTURE)->GetWindowRect(m_user_image_rect);
 		ScreenToClient(m_user_image_rect);
-		PrintImage(_T("img\\IDE_user.bmp"), m_user_image, m_user_image_rect);
+		PrintImage(_T("img\\IDLE_user.bmp"), m_user_image, m_user_image_rect);
 
 		UpdateData(FALSE);
 		Invalidate(TRUE);
