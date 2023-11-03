@@ -4,9 +4,7 @@
 #include "pch.h"
 #include "RFIDDlg.h"
 
-//#define CONSOLE_DEBUG // 콘솔 디버깅이 필요하면 CONSOLE_DEBUG을 define하기
-
-#ifdef CONSOLE_DEBUG
+#ifdef _DEBUG
 #pragma comment(linker, "/ENTRY:WinMainCRTStartup /subsystem:console") // 빌드하여 실행했을 때, 콘솔도 함께 뜨도록 만들기 위한 명령
 #endif
 
@@ -55,14 +53,14 @@ BOOL Is_Win11_or_Later()
 	// dwMajor가 10 이고 빌드번호가 22000 이상이면 윈도우 11 이다
 	if (10 == dwMajor && 22000 <= dwBuildNumber)
 	{
-#ifdef CONSOLE_DEBUG
+#ifdef _DEBUG
 		printf("윈도우 11입니다!!!");
 #endif
 		return TRUE;
 	}
 	else
 	{
-#ifdef CONSOLE_DEBUG
+#ifdef _DEBUG
 		printf("윈도우 10입니다...");
 #endif
 		return FALSE;
@@ -847,7 +845,7 @@ BOOL CRFIDDlg::OnConnect()
 	//열린 포트번호 찾기
 	if (is_GetDeviceNumber(&usbnumber) == IS_OK)
 	{
-#ifdef CONSOLE_DEBUG
+#ifdef _DEBUG
 		printf("FTDI USB To Serial 연결된 개수 : %d\n", usbnumber);
 #endif
 		if (is_GetSerialNumber(0, readSerialNumber) == IS_OK)
@@ -856,7 +854,7 @@ BOOL CRFIDDlg::OnConnect()
 			{
 				if (is_SetSerialNumber(0, changeSerialNumber) == IS_OK)
 				{
-#ifdef CONSOLE_DEBUG 
+#ifdef _DEBUG 
 					printf(" USB To Serial Number 를 변경 하였습니다.\n");
 					printf(" FTDI SerialNumber :  %s \n", changeSerialNumber);
 #endif
@@ -864,7 +862,7 @@ BOOL CRFIDDlg::OnConnect()
 			}
 			else
 			{
-#ifdef CONSOLE_DEBUG 
+#ifdef _DEBUG 
 				printf(" FTDI SerialNumber :  %s \n", changeSerialNumber);
 #endif
 			}
@@ -875,21 +873,21 @@ BOOL CRFIDDlg::OnConnect()
 	unsigned long portNumber;
 	if (is_GetCOMPort_NoConnect(0, &portNumber) == IS_OK)
 	{
-#ifdef CONSOLE_DEBUG 
+#ifdef _DEBUG 
 		printf("COM Port : %d\n", portNumber);
 #endif
 	}
 
 	if (is_OpenSerialNumber(&ftHandle, readSerialNumber, 115200) != IS_OK)
 	{
-#ifdef CONSOLE_DEBUG 
+#ifdef _DEBUG 
 		printf("USB To Serial과 통신 연결 실패\n");
 #endif
 		Sleep(100);
 		return FALSE;
 	}
 	else {
-#ifdef CONSOLE_DEBUG 
+#ifdef _DEBUG 
 		printf("Serial포트 %d와 통신 연결성공!! \n", portNumber);
 #endif
 		Sleep(100);
@@ -909,14 +907,14 @@ BOOL CRFIDDlg::OnDisconnect()
 	//USB 포트를 Close
 	if (is_Close(ftHandle) == IS_OK)
 	{
-#ifdef CONSOLE_DEBUG 
+#ifdef _DEBUG 
 		printf("연결을 닫습니다. ");
 #endif
 		return TRUE;
 	}
 	else
 	{
-#ifdef CONSOLE_DEBUG 
+#ifdef _DEBUG 
 		printf("연결 닫기 실패. ");
 #endif
 		return FALSE;
@@ -934,14 +932,14 @@ void CRFIDDlg::AttachDB(string& DBName)
 
 	if (mysql_real_connect(&Connect, CONNECT_IP, DB_USER, DB_PASSWORD, DBName.c_str(), DB_PORT, NULL, 0))
 	{
-#ifdef CONSOLE_DEBUG 
+#ifdef _DEBUG 
 		printf("%s DB 연결성공!!!\n", DBName.c_str());
 #endif
 	}
 	else
 	{
 		AfxMessageBox(_T("DB연결에 실패했습니다.\nDB서버 개방여부 확인하십시오."));
-#ifdef CONSOLE_DEBUG 
+#ifdef _DEBUG 
 		printf("%s DB 연결실패...\n", DBName.c_str());
 #endif
 	}
@@ -957,7 +955,7 @@ void CRFIDDlg::DetachDB(string& DBName)
 {
 	m_flagDBConnection = FALSE;
 	mysql_close(&Connect);
-#ifdef CONSOLE_DEBUG 
+#ifdef _DEBUG 
 	printf("%s DB 연결해제...\n", DBName.c_str()); 
 #endif
 }
@@ -1033,7 +1031,7 @@ BOOL CRFIDDlg::RunUserQuery(CString card_uid, CString& name, CString& authority,
 	string query;
 	query = string("SELECT name, authority, img_path FROM user WHERE card_uid = '") + string(CT2CA(card_uid)) + string("';");
 
-#ifdef CONSOLE_DEBUG 
+#ifdef _DEBUG 
 	cout << query << endl;
 #endif
 
@@ -1073,18 +1071,18 @@ CString CRFIDDlg::ReadCardUID(uint8_t ISO_type)
 		if (is_WriteReadCommand(ftHandle, CM1_ISO14443AB, CM2_ISO14443A_ACTIVE + BUZZER_ON,
 			writeLength, wirteData, &readLength, readData) == IS_OK)
 		{
-#ifdef CONSOLE_DEBUG 
+#ifdef _DEBUG 
 			printf("ISO 14443AB UID : ");
 #endif
 			for (uint16_t i = 0; i < readLength; i++)
 			{
 				temp.Format(_T("%02x "), readData[i]);
 				card_uid += temp;
-#ifdef CONSOLE_DEBUG 
+#ifdef _DEBUG 
 				printf("%02x ", readData[i]);
 #endif
 			}
-#ifdef CONSOLE_DEBUG 
+#ifdef _DEBUG 
 			printf("\n");
 #endif
 		}
@@ -1095,18 +1093,18 @@ CString CRFIDDlg::ReadCardUID(uint8_t ISO_type)
 		if (is_WriteReadCommand(ftHandle, CM1_ISO15693, CM2_ISO15693_ACTIVE + BUZZER_ON,
 			writeLength, wirteData, &readLength, readData) == IS_OK)
 		{
-#ifdef CONSOLE_DEBUG 
+#ifdef _DEBUG 
 			printf("ISO 15693 UID : ");
 #endif
 			for (uint16_t i = 0; i < readLength; i++)
 			{
 				temp.Format(_T("%02x "), readData[i]);
 				card_uid += temp;
-#ifdef CONSOLE_DEBUG 
+#ifdef _DEBUG 
 				printf("%02x ", readData[i]);
 #endif
 			}
-#ifdef CONSOLE_DEBUG 
+#ifdef _DEBUG 
 			printf("\n");
 #endif
 		}
@@ -1180,7 +1178,7 @@ LRESULT CRFIDDlg::ReadUserCard(WPARAM wParam, LPARAM lParam)
 		{
 			m_flagUserAuthority = TRUE;
 			m_strUserAuthority = _T("관리자");
-#ifdef CONSOLE_DEBUG 
+#ifdef _DEBUG 
 			printf("접근 권한 open.\n");
 #endif
 		}
@@ -1188,7 +1186,7 @@ LRESULT CRFIDDlg::ReadUserCard(WPARAM wParam, LPARAM lParam)
 		{
 			m_flagUserAuthority = FALSE;
 			m_strUserAuthority = _T("일반사원");
-#ifdef CONSOLE_DEBUG 
+#ifdef _DEBUG 
 			printf("접근 권한 close.\n");
 #endif
 		}
